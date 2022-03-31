@@ -1,0 +1,10 @@
+/.settings/language.settings.xml
+/.settings/org.eclipse.cdt.codan.core.prefs
+/.settings/org.eclipse.cdt.core.prefs
+/.settings/stm32cubeide.project.prefs
+/Debug/Core/Src/*.d
+*.o
+*.su
+*.mk
+*.d
+/Debug
