@@ -29,16 +29,11 @@ class TaskMonitor
         /// @brief Struct for messages for the Task Monitor
         struct Message
         {
-            Message(MsgId id = INVALID, osThreadId_t tId = nullptr, uint32_t seq = 0) : msgId{id}, taskId{tId}, seqNum{seq} {}
+            Message(MsgId id = INVALID, osThreadId_t tId = nullptr) : msgId{id}, taskId{tId}{}
 
             MsgId msgId;
             osThreadId_t taskId;
-            uint32_t seqNum;
         };
-
-        /// @brief Only need one instance of the TaskMonitor
-        /// @return instance to this object
-        static TaskMonitor& GetInstance();
 
         /// @brief Post initialize message to this task
         void Initialize();
@@ -48,20 +43,12 @@ class TaskMonitor
         void Run();
 
         /// @brief checkin function for other tasks to use to checkin with the task monitor
-        void TaskCheckin();
+        static void TaskCheckin();
 
         /// @brief send msg to shutdown this task
-        /// @param seqNum - sequence number of this transaction
-        void Shutdown(uint32_t seqNum);
-
-        // Unused
-        TaskMonitor(const TaskMonitor&) = delete;
-        TaskMonitor& operator=(const TaskMonitor&) = delete;
+        void Shutdown();
 
     private:
-
-        /// @brief constructor
-        TaskMonitor() {}
 
         /// @brief handle checkin message from other tasks
         /// @param msg - msg received
@@ -78,8 +65,7 @@ class TaskMonitor
         void HandleInitialize();
 
         /// @brief Shutdown this task
-        /// @param seqNum - sequence number for this transaction
-        void HandleShutdown(uint32_t seqNum);
+        void HandleShutdown();
 };
 
 #endif // TASK_MONITOR_HPP_

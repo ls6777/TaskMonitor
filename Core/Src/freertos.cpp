@@ -27,6 +27,11 @@
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
 #include "lptim.h"
+#include "TaskMonitor.hpp"
+#include "defaultTask.hpp"
+#include "task1.hpp"
+#include "task2.hpp"
+#include "task3.hpp"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,8 +53,6 @@ typedef StaticQueue_t osStaticMessageQDef_t;
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-static char taskListBuf[500];
-static char taskStatsBuf[500];
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -75,40 +78,40 @@ const osThreadAttr_t taskMonitor_attributes = {
   .stack_size = sizeof(taskMonitorBuffer),
   .priority = (osPriority_t) osPriorityRealtime7,
 };
-/* Definitions for Task1 */
-osThreadId_t Task1Handle;
-uint32_t Task1Buffer[ 256 ];
-osStaticThreadDef_t Task1ControlBlock;
-const osThreadAttr_t Task1_attributes = {
-  .name = "Task1",
-  .cb_mem = &Task1ControlBlock,
-  .cb_size = sizeof(Task1ControlBlock),
-  .stack_mem = &Task1Buffer[0],
-  .stack_size = sizeof(Task1Buffer),
+/* Definitions for task1 */
+osThreadId_t task1Handle;
+uint32_t task1Buffer[ 256 ];
+osStaticThreadDef_t task1ControlBlock;
+const osThreadAttr_t task1_attributes = {
+  .name = "task1",
+  .cb_mem = &task1ControlBlock,
+  .cb_size = sizeof(task1ControlBlock),
+  .stack_mem = &task1Buffer[0],
+  .stack_size = sizeof(task1Buffer),
   .priority = (osPriority_t) osPriorityRealtime,
 };
-/* Definitions for Task2 */
-osThreadId_t Task2Handle;
-uint32_t Task2Buffer[ 256 ];
-osStaticThreadDef_t Task2ControlBlock;
-const osThreadAttr_t Task2_attributes = {
-  .name = "Task2",
-  .cb_mem = &Task2ControlBlock,
-  .cb_size = sizeof(Task2ControlBlock),
-  .stack_mem = &Task2Buffer[0],
-  .stack_size = sizeof(Task2Buffer),
+/* Definitions for task2 */
+osThreadId_t task2Handle;
+uint32_t task2Buffer[ 256 ];
+osStaticThreadDef_t task2ControlBlock;
+const osThreadAttr_t task2_attributes = {
+  .name = "task2",
+  .cb_mem = &task2ControlBlock,
+  .cb_size = sizeof(task2ControlBlock),
+  .stack_mem = &task2Buffer[0],
+  .stack_size = sizeof(task2Buffer),
   .priority = (osPriority_t) osPriorityHigh,
 };
-/* Definitions for Task3 */
-osThreadId_t Task3Handle;
-uint32_t Task3Buffer[ 256 ];
-osStaticThreadDef_t Task3ControlBlock;
-const osThreadAttr_t Task3_attributes = {
-  .name = "Task3",
-  .cb_mem = &Task3ControlBlock,
-  .cb_size = sizeof(Task3ControlBlock),
-  .stack_mem = &Task3Buffer[0],
-  .stack_size = sizeof(Task3Buffer),
+/* Definitions for task3 */
+osThreadId_t task3Handle;
+uint32_t task3Buffer[ 256 ];
+osStaticThreadDef_t task3ControlBlock;
+const osThreadAttr_t task3_attributes = {
+  .name = "task3",
+  .cb_mem = &task3ControlBlock,
+  .cb_size = sizeof(task3ControlBlock),
+  .stack_mem = &task3Buffer[0],
+  .stack_size = sizeof(task3Buffer),
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
 /* Definitions for defaultTaskQ */
@@ -192,7 +195,7 @@ __weak void configureTimerForRunTimeStats(void)
     HAL_LPTIM_Counter_Start(&hlptim1, 0xFFFF);
 }
 
-static unsigned long lpCounter = 0;
+unsigned long lpCounter = 0;
 
 __weak unsigned long getRunTimeCounterValue(void)
 {
@@ -274,14 +277,14 @@ void MX_FREERTOS_Init(void) {
   /* creation of taskMonitor */
   taskMonitorHandle = osThreadNew(StartTaskMonitor, NULL, &taskMonitor_attributes);
 
-  /* creation of Task1 */
-  Task1Handle = osThreadNew(StartTask1, NULL, &Task1_attributes);
+  /* creation of task1 */
+  task1Handle = osThreadNew(StartTask1, NULL, &task1_attributes);
 
-  /* creation of Task2 */
-  Task2Handle = osThreadNew(StartTask2, NULL, &Task2_attributes);
+  /* creation of task2 */
+  task2Handle = osThreadNew(StartTask2, NULL, &task2_attributes);
 
-  /* creation of Task3 */
-  Task3Handle = osThreadNew(StartTask3, NULL, &Task3_attributes);
+  /* creation of task3 */
+  task3Handle = osThreadNew(StartTask3, NULL, &task3_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -303,27 +306,9 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
-  /* Infinite loop */
-  for(;;)
-  {
-      printf("LP Counter: %lu\r\n\r\n", lpCounter);
-
-      vTaskList(taskListBuf);
-      printf("TASK INFO**********************************************\r\n");
-      printf("Name          State  Priority   Stack   Num\r\n");
-      printf("*******************************************\r\n");
-      printf("%s\r\n", taskListBuf);
-      printf("\r\n");
-
-      vTaskGetRunTimeStats(taskStatsBuf);
-      printf("TASK STATS INFO****************************************\r\n");
-      printf("Name             Abs Time       %% Time\r\n");
-      printf("*******************************************\r\n");
-      printf("%s\r\n", taskStatsBuf);
-      printf("\r\n");
-
-      osDelay(10000);
-  }
+    defaultTask dTask;
+    dTask.Initialize();
+    dTask.Run();
   /* USER CODE END StartDefaultTask */
 }
 
@@ -337,11 +322,9 @@ void StartDefaultTask(void *argument)
 void StartTaskMonitor(void *argument)
 {
   /* USER CODE BEGIN StartTaskMonitor */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(10);
-  }
+    TaskMonitor taskMonitor;
+    taskMonitor.Initialize();
+    taskMonitor.Run();
   /* USER CODE END StartTaskMonitor */
 }
 
@@ -355,13 +338,9 @@ void StartTaskMonitor(void *argument)
 void StartTask1(void *argument)
 {
   /* USER CODE BEGIN StartTask1 */
-    int count = 0;
-  /* Infinite loop */
-  for(;;)
-  {
-//      printf("Task1: %d\r\n", count++);
-    osDelay(500);
-  }
+    task1 t1;
+    t1.Initialize();
+    t1.Run();
   /* USER CODE END StartTask1 */
 }
 
@@ -375,13 +354,9 @@ void StartTask1(void *argument)
 void StartTask2(void *argument)
 {
   /* USER CODE BEGIN StartTask2 */
-    int count = 0;
-  /* Infinite loop */
-  for(;;)
-  {
-//      printf("Task2: %d\r\n", count++);
-    osDelay(250);
-  }
+    task2 t2;
+    t2.Initialize();
+    t2.Run();
   /* USER CODE END StartTask2 */
 }
 
@@ -395,13 +370,9 @@ void StartTask2(void *argument)
 void StartTask3(void *argument)
 {
   /* USER CODE BEGIN StartTask3 */
-    int count = 0;
-  /* Infinite loop */
-  for(;;)
-  {
-//      printf("Task3: %d\r\n", count++);
-    osDelay(100);
-  }
+    task3 t3;
+    t3.Initialize();
+    t3.Run();
   /* USER CODE END StartTask3 */
 }
 

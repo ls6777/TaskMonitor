@@ -1,6 +1,12 @@
 
 #include "TaskMonitor.hpp"
+#include "defaultTask.hpp"
+#include "task1.hpp"
+#include "task2.hpp"
+#include "task3.hpp"
 
+#include "main.h"
+#include "stdio.h"
 #include "iwdg.h"
 #include <map>
 
@@ -16,26 +22,12 @@ struct TaskMonitorInfo
     void (*checkinCall)();
 };
 
-static constexpr uint32_t DeviceManager_TIMEOUT = pdMS_TO_TICKS(60 * Conversion::MS_PER_SEC);
-static constexpr uint32_t EcgDataCollector_TIMEOUT = pdMS_TO_TICKS(10 * Conversion::MS_PER_SEC);
-static constexpr uint32_t EcgDataFlashSaver_TIMEOUT = pdMS_TO_TICKS(10 * Conversion::MS_PER_SEC);
-static constexpr uint32_t WanTransferManager_TIMEOUT = pdMS_TO_TICKS(60 * Conversion::MS_PER_SEC);
-static constexpr uint32_t LogManager_TIMEOUT = pdMS_TO_TICKS(10 * Conversion::MS_PER_SEC);
-static constexpr uint32_t StudyManager_TIMEOUT = pdMS_TO_TICKS(60 * Conversion::MS_PER_SEC);
-static constexpr uint32_t DefaultMgr_TIMEOUT = pdMS_TO_TICKS(10 * Conversion::MS_PER_SEC);
-static constexpr uint32_t PushButtonMgr_TIMEOUT = pdMS_TO_TICKS(10 * Conversion::MS_PER_SEC);
-static constexpr uint32_t LedManager_TIMEOUT = pdMS_TO_TICKS(10 * Conversion::MS_PER_SEC);
+static constexpr uint32_t task1Timeout = pdMS_TO_TICKS(10 * MS_PER_SEC);           // 10 seconds
+static constexpr uint32_t task2Timeout = pdMS_TO_TICKS(1 * MS_PER_SEC);            // 1 second
+static constexpr uint32_t task3Timeout = pdMS_TO_TICKS(100);                                   // 100 ms
+static constexpr uint32_t defaultTaskTimeout = pdMS_TO_TICKS(60 * MS_PER_SEC);     // 60 seconds
 
 std::map<osThreadId_t, TaskMonitorInfo> taskMonInfo;
-
-//---------------------------------------------------
-// GetInstance
-//---------------------------------------------------
-TaskMonitor& TaskMonitor::GetInstance()
-{
-    static TaskMonitor instance;
-    return instance;
-}
 
 //---------------------------------------------------
 // Initialize
@@ -49,9 +41,9 @@ void TaskMonitor::Initialize()
 //------------------------------------------------------------------
 // Shutdown
 //------------------------------------------------------------------
-void TaskMonitor::Shutdown(uint32_t seqNum)
+void TaskMonitor::Shutdown()
 {
-    Message msg(SHUTDOWN, nullptr, seqNum);
+    Message msg(SHUTDOWN, nullptr);
     ASSERT(osOK == osMessageQueuePut(taskMonitorQHandle, &msg, 0, 0));
 }
 
@@ -70,26 +62,20 @@ void TaskMonitor::TaskCheckin()
 //------------------------------------------------------------------
 void TaskMonitor::Run()
 {
-    constexpr uint32_t MSG_Q_TIMEOUT = 1000; // ms
+    constexpr uint32_t MSG_Q_TIMEOUT = 10; // ms
     osStatus_t status = osError;
     Message msg;
 
 #ifdef ENABLE_TASK_MAX_CHECKIN_TIMES
-    const uint16_t STATS_DELAY = 30000/MSG_Q_TIMEOUT;
-    uint16_t count = 0;
+    const uint32_t STATS_DELAY = 30000/MSG_Q_TIMEOUT; // 30 seconds
+    uint32_t count = 0;
 #endif
 
-
+    // Task loop - never exits
     while (true)
     {
-        // Allow Sleep when waiting for a new message
-        SleepManager::GetInstance().AllowSleep(SleepManager::TASK_MONITOR);
-
         // Check for new data ready message indicating RAM buffer is full
         status = osMessageQueueGet(taskMonitorQHandle, &msg, NULL, pdMS_TO_TICKS(MSG_Q_TIMEOUT));
-
-        // Disable sleep while processing
-        SleepManager::GetInstance().DisallowSleep(SleepManager::TASK_MONITOR);
 
         // Check status of message Q result
         if (status != osOK && status != osErrorTimeout)
@@ -97,6 +83,7 @@ void TaskMonitor::Run()
             continue;
         }
 
+        // handle any message received
         if (status != osErrorTimeout)
         {
             switch (msg.msgId)
@@ -110,11 +97,11 @@ void TaskMonitor::Run()
                     break;
 
                 case SHUTDOWN:
-                    HandleShutdown(msg.seqNum);
+                    HandleShutdown();
                     break;
 
                 default:
-                    LOG(LogCode::TASK_MONITOR_ERROR, "unknown msgId: ", msg.msgId);
+                    printf("TaskMonitor - unknown msgId: %d\r\n", msg.msgId);
                     break;
             }
         }
@@ -125,20 +112,21 @@ void TaskMonitor::Run()
 #ifdef ENABLE_TASK_MAX_CHECKIN_TIMES
         ++count;
 
+        // print out max times that tasks took to respond to task monitor message
         if (count == STATS_DELAY)
         {
             count = 0;
 
             for (auto& [key, val] : taskMonInfo)
             {
-                PRINTLN("TaskId: 0x%x, MAX time = %d ms, name: %s,", key, val.maxElapsedTime, osThreadGetName(key));
+                printf("TaskId: 0x%x, MAX time = %lu ms, name: %s\r\n", key, val.maxElapsedTime, osThreadGetName(key));
             }
         }
 #endif
     }
 }
 
-#define TASK_MON_ENTRY(x, y) taskMonInfo[x] = {x, y##_TIMEOUT, 0, 0, 0, false, &y::TaskCheckin}
+#define TASK_MON_ENTRY(x) taskMonInfo[x##Handle] = {x##Handle, x##Timeout, 0, 0, 0, false, &x::TaskCheckin}
 
 //---------------------------------------------------
 // HandleInitialize
@@ -146,23 +134,19 @@ void TaskMonitor::Run()
 void TaskMonitor::HandleInitialize()
 {
     // Init map with task info
-    TASK_MON_ENTRY(defaultTaskHandle, DefaultMgr);
-    TASK_MON_ENTRY(deviceMgrTaskHandle, DeviceManager);
-    TASK_MON_ENTRY(ecgCollectTaskHandle, EcgDataCollector);
-    TASK_MON_ENTRY(ecgFlashSavTaskHandle, EcgDataFlashSaver);
-    TASK_MON_ENTRY(wanXferMgrTaskHandle, WanTransferManager);
-    TASK_MON_ENTRY(logTaskHandle, LogManager);
-    TASK_MON_ENTRY(studyMgrTaskHandle, StudyManager);
-    TASK_MON_ENTRY(pushButtonTaskHandle, PushButtonMgr);
-    TASK_MON_ENTRY(ledMgrTaskHandle, LedManager);
+    TASK_MON_ENTRY(defaultTask);
+    TASK_MON_ENTRY(task1);
+    TASK_MON_ENTRY(task2);
+    TASK_MON_ENTRY(task3);
+
+    printf("Task Monitor Intialized\r\n");
 }
 
 //------------------------------------------------------------------
 // HandleShutdown
 //------------------------------------------------------------------
-void TaskMonitor::HandleShutdown(uint32_t seqNum)
+void TaskMonitor::HandleShutdown()
 {
-    DeviceManager::TaskMonitorShutdownComplete(seqNum);
     DELAY_MS(osWaitForever);
 }
 
