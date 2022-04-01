@@ -12,6 +12,8 @@
 /// @note Only this task should kick the watchdog.
 /// @note This task needs to run more than 2x the speed of the fastest checkin period (e.g. TaskX has a 100ms timeout, then this task needs
 ///       to execute on a period faster than 50ms to ensure the task doesn't timeout unintentionally. 10x is a good rule of thumb to use.
+/// @note All OS calls are specific to this implementation (i.e. FreeRTOS using CMSIS). To use with other RTOS, simply update OS call to
+///       appropriate calls for the that specific RTOS or RTOS wrapper
 class TaskMonitor
 {
     public:

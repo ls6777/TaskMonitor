@@ -180,6 +180,14 @@ void TaskMonitor::CheckExpirations()
 
             // check for expired task checkins
             ASSERT(val.elapsedTimeWaitingForResponse < val.timeout);
+
+            // Designer can also replace the above with their own logic that can reset tasks, end tasks, or take other actions
+            // based on violations. Example below:
+            // if (val.elapsedTimeWaitingForResponse > val.timeout)
+            // {
+            //    // Do action, such as restart the task that violated the timeout
+            // }
+
         }
         else // see if any any tasks are ready for another checkin
         {
