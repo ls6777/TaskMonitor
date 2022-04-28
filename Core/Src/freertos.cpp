@@ -338,7 +338,7 @@ void StartTaskMonitor(void *argument)
 void StartTask1(void *argument)
 {
   /* USER CODE BEGIN StartTask1 */
-    task1 t1;
+    Task1 t1;
     t1.Initialize();
     t1.Run();
   /* USER CODE END StartTask1 */

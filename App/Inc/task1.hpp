@@ -2,7 +2,7 @@
 #ifndef TASK1_HPP_
 #define TASK1_HPP_
 
-class task1
+class Task1
 {
     public:
 
@@ -12,6 +12,7 @@ class task1
             INVALID,        ///< INVALID
             INITIALIZE,     ///< Initialize the task manager and start all the other tasks
             TASK_CHECKIN,   ///< Checkin Message from other tasks
+            PROCESS,        ///< Do some processing in this task
             SHUTDOWN,       ///< message to shutdown this task
             NUM_MSG_IDS
         };
@@ -27,6 +28,9 @@ class task1
         /// @brief Post initialize message to this task
         void Initialize();
 
+        /// @brief Send message for task to do processing
+        void Process();
+
         /// @brief task for the task manager
         /// @details Main loop that waits for messages to get posted to the queue and process them
         void Run();
@@ -41,6 +45,9 @@ class task1
 
         /// @brief Initialize the default task
         void HandleInitialize();
+
+        /// @brief Do some processing on this task
+        void HandleProcess();
 
         /// @brief Shutdown this task
         void HandleShutdown();

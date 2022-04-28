@@ -44,7 +44,7 @@ void defaultTask::Initialize()
 //------------------------------------------------------------------
 void defaultTask::Run()
 {
-    constexpr uint32_t MSG_Q_TIMEOUT = 100; // ms
+    constexpr uint32_t MSG_Q_TIMEOUT = 1000; // ms
     osStatus_t status = osError;
     Message msg;
 

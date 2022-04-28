@@ -1,7 +1,7 @@
 
+#include <Task1.hpp>
 #include "TaskMonitor.hpp"
 #include "defaultTask.hpp"
-#include "task1.hpp"
 #include "task2.hpp"
 #include "task3.hpp"
 
@@ -13,25 +13,24 @@
 /// @brief struct to hold the Task Monitor info for a particular task
 struct TaskMonitorInfo
 {
-    osThreadId_t taskId;
     uint32_t timeout;
     uint32_t elapsedTimeWaitingForResponse;
-    uint32_t elapsedTimeSinceLastRequst;
-    uint32_t maxElapsedTime;
+    uint32_t elapsedTimeSinceLastCheckin;
+    uint32_t maxElapsedTimeWaitingForResponse;
     bool waitingOnResponse;
     void (*checkinCall)();
 };
 
-static constexpr uint32_t task1Timeout = pdMS_TO_TICKS(10 * MS_PER_SEC);           // 10 seconds
-static constexpr uint32_t task2Timeout = pdMS_TO_TICKS(1 * MS_PER_SEC);            // 1 second
-static constexpr uint32_t task3Timeout = pdMS_TO_TICKS(100);                                   // 100 ms
-static constexpr uint32_t defaultTaskTimeout = pdMS_TO_TICKS(60 * MS_PER_SEC);     // 60 seconds
+// Timeout values are from when a message is sent to the task, how long it has to respond. Messages are only sent once per time period.
+static constexpr uint32_t task2Timeout = 1 * MS_PER_SEC;            // 1 second
+static constexpr uint32_t task3Timeout = 100;                       // 100 ms
+static constexpr uint32_t defaultTaskTimeout = 60 * MS_PER_SEC;     // 60 seconds
 
-std::map<osThreadId_t, TaskMonitorInfo> taskMonInfo;
+static std::map<osThreadId_t, TaskMonitorInfo> taskMonInfo;
 
-//---------------------------------------------------
+//------------------------------------------------------------------
 // Initialize
-//---------------------------------------------------
+//------------------------------------------------------------------
 void TaskMonitor::Initialize()
 {
     Message msg(INITIALIZE);
@@ -43,7 +42,7 @@ void TaskMonitor::Initialize()
 //------------------------------------------------------------------
 void TaskMonitor::Shutdown()
 {
-    Message msg(SHUTDOWN, nullptr);
+    Message msg(SHUTDOWN);
     ASSERT(osOK == osMessageQueuePut(taskMonitorQHandle, &msg, 0, 0));
 }
 
@@ -58,34 +57,46 @@ void TaskMonitor::TaskCheckin()
 }
 
 //------------------------------------------------------------------
+// TaskCheckin
+//------------------------------------------------------------------
+void TaskMonitor::Register(uint32_t maxResponseTime, void (*checkinCall)())
+{
+    osThreadId_t taskId = osThreadGetId();
+    Message msg(REGISTER, taskId, maxResponseTime, checkinCall);
+    ASSERT(osOK == osMessageQueuePut(taskMonitorQHandle, &msg, 0, 0));
+}
+
+//------------------------------------------------------------------
 // Run
 //------------------------------------------------------------------
 void TaskMonitor::Run()
 {
-    constexpr uint32_t MSG_Q_TIMEOUT = 10; // ms
+    constexpr uint32_t MSG_Q_TIMEOUT = 10; // ms - should be about 10x faster than fastest timeout task requirement
     osStatus_t status = osError;
     Message msg;
 
 #ifdef ENABLE_TASK_MAX_CHECKIN_TIMES
-    const uint32_t STATS_DELAY = 30000/MSG_Q_TIMEOUT; // 30 seconds
-    uint32_t count = 0;
+    const uint32_t STATS_DELAY = pdMS_TO_TICKS(30 * MS_PER_SEC); // 30 seconds
+    uint32_t prevTime = KERNEL_TICKS_IN_MS();
 #endif
 
     // Task loop - never exits
     while (true)
     {
-        // Check for new data ready message indicating RAM buffer is full
+        // Wait for new message up to the Timeout period
         status = osMessageQueueGet(taskMonitorQHandle, &msg, NULL, pdMS_TO_TICKS(MSG_Q_TIMEOUT));
 
         // Check status of message Q result
         if (status != osOK && status != osErrorTimeout)
         {
+            // just continue if the status was not OK or Timeout
             continue;
         }
 
-        // handle any message received
+        // if it wasn't a timeout, then we have a message to process
         if (status != osErrorTimeout)
         {
+            // handle the message received
             switch (msg.msgId)
             {
                 case TASK_CHECKIN:
@@ -94,6 +105,10 @@ void TaskMonitor::Run()
 
                 case INITIALIZE:
                     HandleInitialize();
+                    break;
+
+                case REGISTER:
+                    HandleRegister(msg.taskId, msg.maxResponseTime, msg.checkinCall);
                     break;
 
                 case SHUTDOWN:
@@ -106,40 +121,46 @@ void TaskMonitor::Run()
             }
         }
 
-        // Check for any expired tasks and expired RTC Timers
+        // Check for any expired tasks
         CheckExpirations();
 
 #ifdef ENABLE_TASK_MAX_CHECKIN_TIMES
-        ++count;
 
         // print out max times that tasks took to respond to task monitor message
-        if (count == STATS_DELAY)
+        if (KERNEL_TICKS_IN_MS() - prevTime > STATS_DELAY)
         {
-            count = 0;
-
             for (auto& [key, val] : taskMonInfo)
             {
-                printf("TaskId: 0x%x, MAX time = %lu ms, name: %s\r\n", key, val.maxElapsedTime, osThreadGetName(key));
+                printf("TaskId: 0x%x, MAX time = %lu ms, name: %s\r\n", reinterpret_cast<unsigned int>(key), val.maxElapsedTimeWaitingForResponse, osThreadGetName(key));
             }
+            prevTime = KERNEL_TICKS_IN_MS();
         }
 #endif
     }
 }
 
-#define TASK_MON_ENTRY(x) taskMonInfo[x##Handle] = {x##Handle, x##Timeout, 0, 0, 0, false, &x::TaskCheckin}
+//#define TASK_MON_ENTRY(x) taskMonInfo[x##Handle] = {x##Handle, pdMS_TO_TICKS(x##Timeout), 0, 0, 0, false, &x::TaskCheckin}
 
-//---------------------------------------------------
+//------------------------------------------------------------------
 // HandleInitialize
-//---------------------------------------------------
+//------------------------------------------------------------------
 void TaskMonitor::HandleInitialize()
 {
-    // Init map with task info
-    TASK_MON_ENTRY(defaultTask);
-    TASK_MON_ENTRY(task1);
-    TASK_MON_ENTRY(task2);
-    TASK_MON_ENTRY(task3);
+//    // Init map with task info
+//    TASK_MON_ENTRY(defaultTask);
+//    TASK_MON_ENTRY(task1);
+//    TASK_MON_ENTRY(task2);
+//    TASK_MON_ENTRY(task3);
 
     printf("Task Monitor Intialized\r\n");
+}
+
+//------------------------------------------------------------------
+// HandleRegister
+//------------------------------------------------------------------
+void TaskMonitor::HandleRegister(osThreadId_t id, uint32_t maxResponseTime, void (*checkinCall)())
+{
+    taskMonInfo[id] = {pdMS_TO_TICKS(maxResponseTime), 0, 0, 0, false, checkinCall};
 }
 
 //------------------------------------------------------------------
@@ -147,6 +168,7 @@ void TaskMonitor::HandleInitialize()
 //------------------------------------------------------------------
 void TaskMonitor::HandleShutdown()
 {
+    printf("Task Monitor Shutdown\r\n");
     DELAY_MS(osWaitForever);
 }
 
@@ -155,31 +177,32 @@ void TaskMonitor::HandleShutdown()
 //------------------------------------------------------------------
 void TaskMonitor::CheckExpirations()
 {
-    static uint32_t currTime = KERNEL_TICKS_IN_MS();
-    static uint32_t prevTime = currTime;
+    static uint32_t prevTime = KERNEL_TICKS_IN_MS();
 
-    currTime = KERNEL_TICKS_IN_MS();
+    uint32_t currTime = KERNEL_TICKS_IN_MS();
+    uint32_t elapsedTime = currTime - prevTime;
 
-    // Add time to elapsedTime
-    // If no expired tasks, then kick the watchdog, otherwise something is wrong and we need to let the watchdog bite
-    for (auto& [key, val] : taskMonInfo)
+    // Go through all the tasks and check for status
+    for (auto& [taskId, monInfo] : taskMonInfo)
     {
-        val.elapsedTimeSinceLastRequst += (currTime - prevTime);
+        // add to elapsed time since last checkin
+        monInfo.elapsedTimeSinceLastCheckin += elapsedTime;
 
-        // check for active task checkin
-        if (true == val.waitingOnResponse)
+        // check for active task checkin state
+        if (true == monInfo.waitingOnResponse)
         {
-            // if active, then add elapsed time
-            val.elapsedTimeWaitingForResponse += (currTime - prevTime);
+            // add elapsed time waiting for Response
+            monInfo.elapsedTimeWaitingForResponse += elapsedTime;
 
-            // record max time to respond
-            if (val.elapsedTimeWaitingForResponse > val.maxElapsedTime)
+            // check if this has exceed the max response time
+            if (monInfo.elapsedTimeWaitingForResponse > monInfo.maxElapsedTimeWaitingForResponse)
             {
-                val.maxElapsedTime = val.elapsedTimeWaitingForResponse;
+                // record max time to respond - This is just for debugging/user knowledge
+                monInfo.maxElapsedTimeWaitingForResponse = monInfo.elapsedTimeWaitingForResponse;
             }
 
-            // check for expired task checkins
-            ASSERT(val.elapsedTimeWaitingForResponse < val.timeout);
+            // check for expired task checkins... if there was a violation, we can ASSERT which basically disables the system until the watchdog bites
+            ASSERT(monInfo.elapsedTimeWaitingForResponse < monInfo.timeout);
 
             // Designer can also replace the above with their own logic that can reset tasks, end tasks, or take other actions
             // based on violations. Example below:
@@ -191,11 +214,9 @@ void TaskMonitor::CheckExpirations()
         }
         else // see if any any tasks are ready for another checkin
         {
-            if (val.elapsedTimeSinceLastRequst > val.timeout)
+            if (monInfo.elapsedTimeSinceLastCheckin > monInfo.timeout)
             {
-                val.elapsedTimeSinceLastRequst = 0;
-                val.waitingOnResponse = true;
-                SendTaskCheckInMsg(key);
+                SendTaskCheckInMsg(taskId);
             }
         }
     }
@@ -214,8 +235,12 @@ void TaskMonitor::CheckExpirations()
 //------------------------------------------------------------------
 void TaskMonitor::SendTaskCheckInMsg(osThreadId_t id)
 {
-    ASSERT(taskMonInfo[id].taskId == id);
+    ASSERT(taskMonInfo.find(id) != taskMonInfo.end());
+    ASSERT(taskMonInfo[id].checkinCall != nullptr);
+
     taskMonInfo[id].checkinCall();
+    taskMonInfo[id].elapsedTimeWaitingForResponse = 0;
+    taskMonInfo[id].waitingOnResponse = true;
 }
 
 //------------------------------------------------------------------
@@ -223,8 +248,9 @@ void TaskMonitor::SendTaskCheckInMsg(osThreadId_t id)
 //------------------------------------------------------------------
 void TaskMonitor::HandleTaskCheckin(osThreadId_t id)
 {
-    ASSERT(taskMonInfo[id].taskId == id);
+    ASSERT(taskMonInfo.find(id) != taskMonInfo.end());
 
     taskMonInfo[id].elapsedTimeWaitingForResponse = 0;
+    taskMonInfo[id].elapsedTimeSinceLastCheckin = 0;
     taskMonInfo[id].waitingOnResponse = false;
 }
