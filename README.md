@@ -15,5 +15,5 @@ Task Monitor intended for embedded systems, including small micro controller env
 - Small footprint
 - Can be used for very small embedded systems (e.g. FreeRTOS on 8-bit micro if desired)
 - RTOS agnostic (Can be used with any RTOS with minor updates)
-- Messages will only go out once per period for that task timeout (e.g. task timeout is 100ms, then messages sent out will happen at most once every 100ms, regardless of how quickly the response is received
+- Messages will only go out once per period for that task timeout (e.g. task timeout is 100ms, then messages sent out will happen at most once every 100ms, regardless of how quickly the response is received)
 - Unsolicited messages received for task checkin will automatically reset the timing, so a message won't go out to a task unnecessarily
