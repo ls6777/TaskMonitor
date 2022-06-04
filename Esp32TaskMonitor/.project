@@ -19,6 +19,11 @@
 	</natures>
 	<linkedResources>
 		<link>
+			<name>components</name>
+			<type>2</type>
+			<locationURI>PARENT-4-PROJECT_LOC/Espressif/frameworks/esp-idf-v4.4.1/components</locationURI>
+		</link>
+		<link>
 			<name>esp_idf_components/app_trace/app_trace.c</name>
 			<type>1</type>
 			<location>C:/Espressif/frameworks/esp-idf-v4.4.1/components/app_trace/app_trace.c</location>

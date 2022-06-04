@@ -10,6 +10,8 @@
 static char taskListBuf[500];
 static char taskStatsBuf[500];
 
+QueueHandle_t DefaultTask::msgQHandle;
+
 //------------------------------------------------------------------
 // TaskCheckin
 //------------------------------------------------------------------
@@ -33,6 +35,7 @@ void DefaultTask::Shutdown()
 //------------------------------------------------------------------
 void DefaultTask::Initialize()
 {
+    msgQHandle = xQueueCreate(10, sizeof(Message));
     Message msg(Message::INITIALIZE);
     assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
 }
@@ -46,8 +49,9 @@ void DefaultTask::Run()
     BaseType_t status = pdFALSE;
     Message msg;
 
-    const uint16_t STATS_DELAY = 30000/MSG_Q_TIMEOUT;
-    uint16_t count = 0;
+    const uint32_t STATS_DELAY = 30000; // ms
+
+    uint32_t prevTime = KERNEL_TICKS_IN_MS();
 
     while (true)
     {
@@ -59,7 +63,7 @@ void DefaultTask::Run()
             switch (msg.msgId)
             {
                 case Message::TASK_CHECKIN:
-                    TaskMonitor::TaskCheckin();
+//                    TaskMonitor::TaskCheckin();
                     break;
 
                 case Message::INITIALIZE:
@@ -76,14 +80,15 @@ void DefaultTask::Run()
             }
         }
 
-        if (count == STATS_DELAY)
+        uint32_t currTime = KERNEL_TICKS_IN_MS();
+        if ((currTime - prevTime) > STATS_DELAY)
         {
-            count = 0;
+            prevTime = KERNEL_TICKS_IN_MS();
 
             vTaskList(taskListBuf);
             printf("TASK INFO**********************************************\r\n");
-            printf("Name          State  Priority   Stack   Num\r\n");
-            printf("*******************************************\r\n");
+            printf("Name          State  Priority   Stack   Num    Core\r\n");
+            printf("*******************************************************\r\n");
             printf("%s\r\n", taskListBuf);
             printf("\r\n");
 

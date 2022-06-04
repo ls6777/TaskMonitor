@@ -14,7 +14,7 @@ extern "C"
 }
 #endif
 
-constexpr uint32_t DEFAULT_TASK_STACK_SIZE = 1024;
+constexpr uint32_t DEFAULT_TASK_STACK_SIZE = 2048;
 constexpr UBaseType_t DEFAULT_TASK_PRIORITY = 2;
 
 //------------------------------------------------------------------
@@ -32,7 +32,7 @@ void StartDefaultTask(void *argument)
 //------------------------------------------------------------------
 void app_main(void)
 {
-    TaskHandle_t* taskHandle;
+    TaskHandle_t* taskHandle = nullptr;
 
     // default task
     xTaskCreate(&StartDefaultTask, "defaultTask", DEFAULT_TASK_STACK_SIZE, NULL, DEFAULT_TASK_PRIORITY, taskHandle);
