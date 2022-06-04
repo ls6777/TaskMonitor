@@ -17,3 +17,6 @@ Task Monitor intended for embedded systems, including small micro controller env
 - RTOS agnostic (Can be used with any RTOS with minor updates)
 - Messages will only go out once per period for that task timeout (e.g. task timeout is 100ms, then messages sent out will happen at most once every 100ms, regardless of how quickly the response is received)
 - Unsolicited messages received for task checkin will automatically reset the timing, so a message won't go out to a task unnecessarily
+
+## Targets
+I started this work on an STM32 board, but was required to switch to the ESP32 platform before completing the project.  I felt it was valuable to provide both as different examples of doing essentially the same thing.  Currently the STM32 is the most complete.  However, as I've switched over the the ESP32, that will eventually be the latest and best example. However, this can be adapted to use with any target and RTOS.
