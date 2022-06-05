@@ -11,6 +11,7 @@ class Message
             INVALID,        ///< INVALID
             INITIALIZE,     ///< Initialize the task
             TASK_CHECKIN,   ///< Checkin Message
+            REGISTER,       ///< Register
             SHUTDOWN,       ///< message to shutdown this task
             NUM_MSG_IDS
         };

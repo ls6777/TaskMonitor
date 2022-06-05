@@ -3,7 +3,7 @@
 
 #include "DefaultTask.hpp"
 #include "Message.hpp"
-//#include "TaskMonitor.hpp"
+#include "TaskMonitor.hpp"
 #include "Utils.hpp"
 
 
@@ -49,7 +49,7 @@ void DefaultTask::Run()
     BaseType_t status = pdFALSE;
     Message msg;
 
-    const uint32_t STATS_DELAY = 30000; // ms
+    const uint32_t STATS_DELAY = 30 * MS_PER_SEC; // ms
 
     uint32_t prevTime = KERNEL_TICKS_IN_MS();
 
@@ -63,7 +63,7 @@ void DefaultTask::Run()
             switch (msg.msgId)
             {
                 case Message::TASK_CHECKIN:
-//                    TaskMonitor::TaskCheckin();
+                    TaskMonitor::TaskCheckin();
                     break;
 
                 case Message::INITIALIZE:
@@ -107,6 +107,8 @@ void DefaultTask::Run()
 //---------------------------------------------------
 void DefaultTask::HandleInitialize()
 {
+    static constexpr uint32_t TASK_TIMEOUT = 60 * MS_PER_SEC;
+    TaskMonitor::Register(TASK_TIMEOUT, &TaskCheckin);
     printf("Default Task Intialized\r\n");
 }
 
