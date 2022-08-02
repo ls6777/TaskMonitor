@@ -12,6 +12,7 @@ class Message
             INITIALIZE,     ///< Initialize the task
             TASK_CHECKIN,   ///< Checkin Message
             REGISTER,       ///< Register
+            PROCESS,        ///< Do some processing
             SHUTDOWN,       ///< message to shutdown this task
             NUM_MSG_IDS
         };

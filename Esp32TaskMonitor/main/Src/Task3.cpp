@@ -1,27 +1,35 @@
-#include "DefaultTask.hpp"
-#include "Message.hpp"
+
+#include "Task3.hpp"
 #include "TaskMonitor.hpp"
+#include "Message.hpp"
 #include "Utils.hpp"
 
+static constexpr uint32_t TIMEOUT = 100; // ms
 
-static char taskListBuf[500];
-static char taskStatsBuf[500];
-
-QueueHandle_t DefaultTask::msgQHandle;
+QueueHandle_t Task3::msgQHandle;
 
 //------------------------------------------------------------------
 // TaskCheckin
 //------------------------------------------------------------------
-void DefaultTask::TaskCheckin()
+void Task3::TaskCheckin()
 {
     Message msg(Message::TASK_CHECKIN);
     assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
 }
 
 //------------------------------------------------------------------
+// Process
+//------------------------------------------------------------------
+void Task3::Process()
+{
+    Message msg(Message::PROCESS);
+    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+}
+
+//------------------------------------------------------------------
 // Shutdown
 //------------------------------------------------------------------
-void DefaultTask::Shutdown()
+void Task3::Shutdown()
 {
     Message msg(Message::SHUTDOWN);
     assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
@@ -30,7 +38,7 @@ void DefaultTask::Shutdown()
 //------------------------------------------------------------------
 // Initialize
 //------------------------------------------------------------------
-void DefaultTask::Initialize()
+void Task3::Initialize()
 {
     msgQHandle = xQueueCreate(10, sizeof(Message));
     Message msg(Message::INITIALIZE);
@@ -40,23 +48,20 @@ void DefaultTask::Initialize()
 //------------------------------------------------------------------
 // Run
 //------------------------------------------------------------------
-void DefaultTask::Run()
+void Task3::Run()
 {
-    constexpr uint32_t MSG_Q_TIMEOUT = 1000; // ms
     BaseType_t status = pdFALSE;
     Message msg;
 
-    const uint32_t STATS_DELAY = 30 * MS_PER_SEC; // ms
-
-    uint32_t prevTime = KERNEL_TICKS_IN_MS();
-
     while (true)
     {
-        // Check for new data ready message indicating RAM buffer is full
-        status = xQueueReceive(msgQHandle, &msg, pdMS_TO_TICKS(MSG_Q_TIMEOUT));
+        // Wait for new message to process
+        status = xQueueReceive(msgQHandle, &msg, portMAX_DELAY);
 
+        // Check status of message Q result
         if (pdTRUE == status)
         {
+            // process message
             switch (msg.msgId)
             {
                 case Message::TASK_CHECKIN:
@@ -67,34 +72,18 @@ void DefaultTask::Run()
                     HandleInitialize();
                     break;
 
+                case Message::PROCESS:
+                    HandleProcess();
+                    break;
+
                 case Message::SHUTDOWN:
                     HandleShutdown();
                     break;
 
                 default:
-                    printf("defaultTask - unknown msgId: %d\r\n", msg.msgId);
+                    printf("task1 - unknown msgId: %d\r\n", msg.msgId);
                     break;
             }
-        }
-
-        uint32_t currTime = KERNEL_TICKS_IN_MS();
-        if ((currTime - prevTime) > STATS_DELAY)
-        {
-            prevTime = KERNEL_TICKS_IN_MS();
-
-            vTaskList(taskListBuf);
-            printf("\r\nTASK INFO**********************************************\r\n");
-            printf("Name          State  Priority   Stack   Num    Core\r\n");
-            printf("*******************************************************\r\n");
-            printf("%s\r\n", taskListBuf);
-            printf("\r\n");
-
-            vTaskGetRunTimeStats(taskStatsBuf);
-            printf("TASK STATS INFO****************************************\r\n");
-            printf("Name             Abs Time       %% Time\r\n");
-            printf("*******************************************\r\n");
-            printf("%s\r\n", taskStatsBuf);
-            printf("\r\n");
         }
     }
 }
@@ -102,17 +91,37 @@ void DefaultTask::Run()
 //---------------------------------------------------
 // HandleInitialize
 //---------------------------------------------------
-void DefaultTask::HandleInitialize()
+void Task3::HandleInitialize()
 {
-    static constexpr uint32_t TASK_TIMEOUT = 60 * MS_PER_SEC;
-    TaskMonitor::Register(TASK_TIMEOUT, &TaskCheckin);
-    printf("Default Task Initialized\r\n");
+    TaskMonitor::Register(TIMEOUT, &TaskCheckin);
+    printf("Task3 Intialized\r\n");
+    Process();
+}
+
+//------------------------------------------------------------------
+// HandleProcess
+//------------------------------------------------------------------
+void Task3::HandleProcess()
+{
+    static uint32_t count = 0;
+
+    count++;
+
+    if (count >= 1000)
+    {
+        count = 0;
+        printf("Task3 stuff: 1000x\r\n");
+    }
+
+    DELAY_MS(10);
+    Process();
 }
 
 //------------------------------------------------------------------
 // HandleShutdown
 //------------------------------------------------------------------
-void DefaultTask::HandleShutdown()
+void Task3::HandleShutdown()
 {
+    printf("Task3 Shutdown\r\n");
     vTaskDelay(portMAX_DELAY);
 }

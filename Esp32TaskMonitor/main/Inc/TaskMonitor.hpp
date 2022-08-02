@@ -37,7 +37,7 @@ class TaskMonitor
 {
     public:
 
-        /// @brief Struct for messages for the Task Monitor
+        /// @brief messages for the Task Monitor
         class TaskMonitorMessage : public Message
         {
             public:

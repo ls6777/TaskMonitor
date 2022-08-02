@@ -156,7 +156,7 @@ void TaskMonitor::HandleRegister(TaskHandle_t id, uint32_t maxResponseTime, void
 void TaskMonitor::HandleShutdown()
 {
     printf("Task Monitor Shutdown\r\n");
-    DELAY_MS(portMAX_DELAY);
+    vTaskDelay(portMAX_DELAY);
 }
 
 //------------------------------------------------------------------
@@ -214,7 +214,7 @@ void TaskMonitor::CheckExpirations()
         }
     }
 
-    // kick the watchdog
+    // kick the watchdog - replace with watchdog reset for your specific target
     esp_task_wdt_reset();
 
     // update prevTime for next eval
