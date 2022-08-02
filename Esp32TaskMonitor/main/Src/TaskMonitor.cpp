@@ -191,7 +191,7 @@ void TaskMonitor::CheckExpirations()
             // check for expired task checkins... if there was a violation, we can print the name of the violator and then wait until the watchdog bites
             if (monInfo.elapsedTimeWaitingForResponse > monInfo.timeout)
             {
-                ESP_LOGE("TaskMonitor", "Task: %s - Exceeded Checkin Time. Elapsed time %u Timeout %u",
+                ESP_LOGE("TaskMonitor", "Task: %s - Exceeded Checkin Time. Elapsed time %u ms, Timeout %u ms",
                         pcTaskGetName(taskId), monInfo.elapsedTimeWaitingForResponse, monInfo.timeout);
 
                 while(1) {}

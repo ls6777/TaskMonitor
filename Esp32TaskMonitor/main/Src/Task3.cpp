@@ -107,10 +107,9 @@ void Task3::HandleProcess()
 
     count++;
 
-    if (count >= 1000)
+    if ((count % 1000) == 0)
     {
-        count = 0;
-        printf("Task3 stuff: 1000x\r\n");
+        printf("Task3 stuff: %u\r\n", count);
     }
 
     DELAY_MS(10);

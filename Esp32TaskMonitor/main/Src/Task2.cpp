@@ -66,7 +66,6 @@ void Task2::Run()
             switch (msg.msgId)
             {
                 case Message::TASK_CHECKIN:
-                    assert(0); // TODO: Should never get here! Testing ONLY!
                     TaskMonitor::TaskCheckin();
                     break;
 
@@ -112,10 +111,9 @@ void Task2::HandleProcess()
 
     count++;
 
-    if (count >= 100)
+    if ((count % 100) == 0)
     {
-        count = 0;
-        printf("Task2 stuff: 100x\r\n");
+        printf("Task2 stuff: %u\r\n", count);
     }
 
     TaskMonitor::TaskCheckin();

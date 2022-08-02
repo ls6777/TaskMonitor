@@ -107,10 +107,9 @@ void Task1::HandleProcess()
 
     count++;
 
-    if (count >= 10)
+    if ((count % 10) == 0)
     {
-        count = 0;
-        printf("Task1 stuff: 10x\r\n");
+        printf("Task1 stuff: %u\r\n", count);
     }
     DELAY_MS(1000);
     Process();
