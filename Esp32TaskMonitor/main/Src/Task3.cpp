@@ -6,7 +6,7 @@
 
 static constexpr uint32_t TIMEOUT = 100; // ms
 
-QueueHandle_t Task3::msgQHandle;
+QHandle Task3::msgQHandle;
 
 //------------------------------------------------------------------
 // TaskCheckin
@@ -14,7 +14,7 @@ QueueHandle_t Task3::msgQHandle;
 void Task3::TaskCheckin()
 {
     Message msg(Message::TASK_CHECKIN);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -23,7 +23,7 @@ void Task3::TaskCheckin()
 void Task3::Process()
 {
     Message msg(Message::PROCESS);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -32,7 +32,7 @@ void Task3::Process()
 void Task3::Shutdown()
 {
     Message msg(Message::SHUTDOWN);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -40,9 +40,9 @@ void Task3::Shutdown()
 //------------------------------------------------------------------
 void Task3::Initialize()
 {
-    msgQHandle = xQueueCreate(10, sizeof(Message));
+    msgQHandle = CreateQ(10, sizeof(Message));
     Message msg(Message::INITIALIZE);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -50,16 +50,16 @@ void Task3::Initialize()
 //------------------------------------------------------------------
 void Task3::Run()
 {
-    BaseType_t status = pdFALSE;
+    StatusType status = FALSE;
     Message msg;
 
     while (true)
     {
         // Wait for new message to process
-        status = xQueueReceive(msgQHandle, &msg, portMAX_DELAY);
+        status = QRecv(msgQHandle, &msg, MAX_DELAY);
 
         // Check status of message Q result
-        if (pdTRUE == status)
+        if (TRUE == status)
         {
             // process message
             switch (msg.msgId)
@@ -81,7 +81,7 @@ void Task3::Run()
                     break;
 
                 default:
-                    printf("task1 - unknown msgId: %d\r\n", msg.msgId);
+                    printf("task3 - unknown msgId: %d\r\n", msg.msgId);
                     break;
             }
         }
@@ -93,8 +93,10 @@ void Task3::Run()
 //---------------------------------------------------
 void Task3::HandleInitialize()
 {
+    // Register this task with the Task Monitor
     TaskMonitor::Register(TIMEOUT, &TaskCheckin);
-    printf("Task3 Intialized\r\n");
+
+    printf("Task3 Initialized\r\n");
     Process();
 }
 
@@ -122,5 +124,6 @@ void Task3::HandleProcess()
 void Task3::HandleShutdown()
 {
     printf("Task3 Shutdown\r\n");
-    vTaskDelay(portMAX_DELAY);
+    // wait forever
+    DELAY(MAX_DELAY);
 }

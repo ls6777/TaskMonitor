@@ -3,11 +3,11 @@
 #include "TaskMonitor.hpp"
 #include "Utils.hpp"
 
-
+// buffers for task stats
 static char taskListBuf[500];
 static char taskStatsBuf[500];
 
-QueueHandle_t DefaultTask::msgQHandle;
+QHandle DefaultTask::msgQHandle;
 
 //------------------------------------------------------------------
 // TaskCheckin
@@ -15,7 +15,7 @@ QueueHandle_t DefaultTask::msgQHandle;
 void DefaultTask::TaskCheckin()
 {
     Message msg(Message::TASK_CHECKIN);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -24,7 +24,7 @@ void DefaultTask::TaskCheckin()
 void DefaultTask::Shutdown()
 {
     Message msg(Message::SHUTDOWN);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -32,9 +32,9 @@ void DefaultTask::Shutdown()
 //------------------------------------------------------------------
 void DefaultTask::Initialize()
 {
-    msgQHandle = xQueueCreate(10, sizeof(Message));
+    msgQHandle = CreateQ(10, sizeof(Message));
     Message msg(Message::INITIALIZE);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -43,7 +43,7 @@ void DefaultTask::Initialize()
 void DefaultTask::Run()
 {
     constexpr uint32_t MSG_Q_TIMEOUT = 1000; // ms
-    BaseType_t status = pdFALSE;
+    StatusType status = FALSE;
     Message msg;
 
     const uint32_t STATS_DELAY = 30 * MS_PER_SEC; // ms
@@ -52,10 +52,10 @@ void DefaultTask::Run()
 
     while (true)
     {
-        // Check for new data ready message indicating RAM buffer is full
-        status = xQueueReceive(msgQHandle, &msg, pdMS_TO_TICKS(MSG_Q_TIMEOUT));
+        // wait for message up to MSG_Q_TIMEOUT
+        status = QRecv(msgQHandle, &msg, MS_TO_TICKS(MSG_Q_TIMEOUT));
 
-        if (pdTRUE == status)
+        if (TRUE == status)
         {
             switch (msg.msgId)
             {
@@ -105,6 +105,8 @@ void DefaultTask::Run()
 void DefaultTask::HandleInitialize()
 {
     static constexpr uint32_t TASK_TIMEOUT = 60 * MS_PER_SEC;
+
+    // Register this task with the Task Monitor
     TaskMonitor::Register(TASK_TIMEOUT, &TaskCheckin);
     printf("Default Task Initialized\r\n");
 }
@@ -114,5 +116,7 @@ void DefaultTask::HandleInitialize()
 //------------------------------------------------------------------
 void DefaultTask::HandleShutdown()
 {
-    vTaskDelay(portMAX_DELAY);
+    printf("Default Task Shutdown\r\n");
+    // wait forever
+    DELAY(MAX_DELAY);
 }

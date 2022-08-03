@@ -1,7 +1,6 @@
 #pragma once
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
+#include "TargetPort.hpp"
 
 /// @brief default task
 class DefaultTask
@@ -11,7 +10,7 @@ class DefaultTask
         /// @brief Post initialize message to this task
         void Initialize();
 
-        /// @brief task for the task manager
+        /// @brief task for the default task
         /// @details Main loop that waits for messages to get posted to the queue and process them
         void Run();
 
@@ -29,5 +28,5 @@ class DefaultTask
         /// @brief Shutdown this task
         void HandleShutdown();
 
-        static QueueHandle_t msgQHandle;
+        static QHandle msgQHandle;
 };

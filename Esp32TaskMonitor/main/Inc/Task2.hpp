@@ -1,8 +1,7 @@
 
 #pragma once
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
+#include "TargetPort.hpp"
 
 /// @brief A sample task doing some processing for example using the TaskMonitor
 class Task2
@@ -19,7 +18,8 @@ class Task2
         /// @details Main loop that waits for messages to get posted to the queue and process them
         void Run();
 
-        /// @brief Used for the task monitor. Used to create a message for this task to respond to the task monitor
+        /// @brief Used for the task monitor.
+        /// @details Used to create a message for this task to respond to the task monitor
         static void TaskCheckin();
 
         /// @brief send msg to shutdown this task
@@ -36,6 +36,6 @@ class Task2
         /// @brief Shutdown this task
         void HandleShutdown();
 
-        static QueueHandle_t msgQHandle;
+        static QHandle msgQHandle;
 };
 

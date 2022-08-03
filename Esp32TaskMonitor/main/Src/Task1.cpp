@@ -6,7 +6,7 @@
 
 static constexpr uint32_t TIMEOUT = 10 * MS_PER_SEC; // 10 seconds
 
-QueueHandle_t Task1::msgQHandle;
+QHandle Task1::msgQHandle;
 
 //------------------------------------------------------------------
 // TaskCheckin
@@ -14,7 +14,7 @@ QueueHandle_t Task1::msgQHandle;
 void Task1::TaskCheckin()
 {
     Message msg(Message::TASK_CHECKIN);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -23,7 +23,7 @@ void Task1::TaskCheckin()
 void Task1::Process()
 {
     Message msg(Message::PROCESS);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -32,7 +32,7 @@ void Task1::Process()
 void Task1::Shutdown()
 {
     Message msg(Message::SHUTDOWN);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -40,9 +40,9 @@ void Task1::Shutdown()
 //------------------------------------------------------------------
 void Task1::Initialize()
 {
-    msgQHandle = xQueueCreate(10, sizeof(Message));
+    msgQHandle = CreateQ(10, sizeof(Message));
     Message msg(Message::INITIALIZE);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -50,16 +50,16 @@ void Task1::Initialize()
 //------------------------------------------------------------------
 void Task1::Run()
 {
-    BaseType_t status = pdFALSE;
+    StatusType status = FALSE;
     Message msg;
 
     while (true)
     {
-        // Wait for new message to process
-        status = xQueueReceive(msgQHandle, &msg, portMAX_DELAY);
+        // Wait for new message to process indefinitely
+        status = QRecv(msgQHandle, &msg, MAX_DELAY);
 
         // Check status of message Q result
-        if (pdTRUE == status)
+        if (TRUE == status)
         {
             // process message
             switch (msg.msgId)
@@ -93,8 +93,10 @@ void Task1::Run()
 //------------------------------------------------------------------
 void Task1::HandleInitialize()
 {
+    // Register this task with the Task Monitor
     TaskMonitor::Register(TIMEOUT, &TaskCheckin);
-    printf("Task1 Intialized\r\n");
+
+    printf("Task1 Initialized\r\n");
     Process();
 }
 
@@ -121,5 +123,6 @@ void Task1::HandleProcess()
 void Task1::HandleShutdown()
 {
     printf("Task1 Shutdown\r\n");
-    vTaskDelay(portMAX_DELAY);
+    // wait forever
+    DELAY(MAX_DELAY);
 }

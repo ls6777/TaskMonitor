@@ -2,8 +2,6 @@
 #include "TaskMonitor.hpp"
 #include "Utils.hpp"
 
-#include "esp_log.h"
-#include "esp_task_wdt.h"
 #include <map>
 
 #define ENABLE_TASK_MAX_CHECKIN_TIMES
@@ -19,23 +17,19 @@ struct TaskMonitorInfo
     void (*checkinCall)();
 };
 
-// Timeout values are from when a message is sent to the task, how long it has to respond. Messages are only sent once per time period.
-//static constexpr uint32_t task2Timeout = 1 * MS_PER_SEC;            // 1 second
-//static constexpr uint32_t task3Timeout = 100;                       // 100 ms
-//static constexpr uint32_t defaultTaskTimeout = 60 * MS_PER_SEC;     // 60 seconds
+// map to hold monitor info for the tasks
+static std::map<TaskHandle, TaskMonitorInfo> taskMonInfo;
 
-static std::map<TaskHandle_t, TaskMonitorInfo> taskMonInfo;
-
-QueueHandle_t TaskMonitor::msgQHandle;
+QHandle TaskMonitor::msgQHandle;
 
 //------------------------------------------------------------------
 // Initialize
 //------------------------------------------------------------------
 void TaskMonitor::Initialize()
 {
-    msgQHandle = xQueueCreate(10, sizeof(TaskMonitorMessage));
+    msgQHandle = CreateQ(10, sizeof(TaskMonitorMessage));
     TaskMonitorMessage msg(Message::INITIALIZE);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -44,7 +38,7 @@ void TaskMonitor::Initialize()
 void TaskMonitor::Shutdown()
 {
     TaskMonitorMessage msg(Message::SHUTDOWN);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -52,9 +46,9 @@ void TaskMonitor::Shutdown()
 //------------------------------------------------------------------
 void TaskMonitor::TaskCheckin()
 {
-    TaskHandle_t taskId = xTaskGetCurrentTaskHandle();
+    TaskHandle taskId = GetCurrTaskHandle();
     TaskMonitorMessage msg(Message::TASK_CHECKIN, taskId);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -62,9 +56,9 @@ void TaskMonitor::TaskCheckin()
 //------------------------------------------------------------------
 void TaskMonitor::Register(uint32_t maxResponseTime, void (*checkinCall)())
 {
-    TaskHandle_t taskId = xTaskGetCurrentTaskHandle();
+    TaskHandle taskId = GetCurrTaskHandle();
     TaskMonitorMessage msg(Message::REGISTER, taskId, maxResponseTime, checkinCall);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -73,7 +67,7 @@ void TaskMonitor::Register(uint32_t maxResponseTime, void (*checkinCall)())
 void TaskMonitor::Run()
 {
     constexpr uint32_t MSG_Q_TIMEOUT = 10; // ms - should be about 10x faster than fastest timeout task requirement
-    BaseType_t status = pdFALSE;
+    StatusType status = FALSE;
     TaskMonitorMessage msg;
 
 #ifdef ENABLE_TASK_MAX_CHECKIN_TIMES
@@ -85,10 +79,10 @@ void TaskMonitor::Run()
     while (true)
     {
         // Wait for new message up to the Timeout period
-        status = xQueueReceive(msgQHandle, &msg, pdMS_TO_TICKS(MSG_Q_TIMEOUT));
+        status = QRecv(msgQHandle, &msg, MS_TO_TICKS(MSG_Q_TIMEOUT));
 
         // if it wasn't a timeout, then we have a message to process
-        if (pdTRUE == status)
+        if (TRUE == status)
         {
             // handle the message received
             switch (msg.msgId)
@@ -138,15 +132,18 @@ void TaskMonitor::Run()
 //------------------------------------------------------------------
 void TaskMonitor::HandleInitialize()
 {
-    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+    // Start watchdog
+    StartWatchdog();
+
     printf("Task Monitor Intialized\r\n");
 }
 
 //------------------------------------------------------------------
 // HandleRegister
 //------------------------------------------------------------------
-void TaskMonitor::HandleRegister(TaskHandle_t id, uint32_t maxResponseTime, void (*checkinCall)())
+void TaskMonitor::HandleRegister(TaskHandle id, uint32_t maxResponseTime, void (*checkinCall)())
 {
+    // add the given task to the monitor map
     taskMonInfo[id] = {maxResponseTime, 0, 0, 0, false, checkinCall};
 }
 
@@ -156,7 +153,9 @@ void TaskMonitor::HandleRegister(TaskHandle_t id, uint32_t maxResponseTime, void
 void TaskMonitor::HandleShutdown()
 {
     printf("Task Monitor Shutdown\r\n");
-    vTaskDelay(portMAX_DELAY);
+
+    // wait forever
+    DELAY(MAX_DELAY);
 }
 
 //------------------------------------------------------------------
@@ -175,13 +174,13 @@ void TaskMonitor::CheckExpirations()
         // add to elapsed time since last checkin
         monInfo.elapsedTimeSinceLastCheckin += elapsedTime;
 
-        // check for active task checkin state
+        // check if we're currently waiting for a response from this task
         if (true == monInfo.waitingOnResponse)
         {
             // add elapsed time waiting for Response
             monInfo.elapsedTimeWaitingForResponse += elapsedTime;
 
-            // check if this has exceed the max response time
+            // check if this task has exceeded the max response time
             if (monInfo.elapsedTimeWaitingForResponse > monInfo.maxElapsedTimeWaitingForResponse)
             {
                 // record max time to respond - This is just for debugging/user knowledge
@@ -191,21 +190,20 @@ void TaskMonitor::CheckExpirations()
             // check for expired task checkins... if there was a violation, we can print the name of the violator and then wait until the watchdog bites
             if (monInfo.elapsedTimeWaitingForResponse > monInfo.timeout)
             {
-                ESP_LOGE("TaskMonitor", "Task: %s - Exceeded Checkin Time. Elapsed time %u ms, Timeout %u ms",
-                        pcTaskGetName(taskId), monInfo.elapsedTimeWaitingForResponse, monInfo.timeout);
+                LOG_ERROR("TaskMonitor", "Task: %s - Exceeded Checkin Time. Elapsed time %u ms, Timeout %u ms",
+                        GetTaskName(taskId), monInfo.elapsedTimeWaitingForResponse, monInfo.timeout);
 
                 while(1) {}
             }
 
             // Designer can also replace the above with their own logic that can reset tasks, end tasks, or take other actions
             // based on violations. Example below:
-            // if (val.elapsedTimeWaitingForResponse > val.timeout)
+            // if (monInfo.elapsedTimeWaitingForResponse > monInfo.timeout)
             // {
             //    // Do action, such as restart the task that violated the timeout
             // }
-
         }
-        else // see if any any tasks are ready for another checkin
+        else // see if any any tasks are ready for another checkin request
         {
             if (monInfo.elapsedTimeSinceLastCheckin > monInfo.timeout)
             {
@@ -214,8 +212,8 @@ void TaskMonitor::CheckExpirations()
         }
     }
 
-    // kick the watchdog - replace with watchdog reset for your specific target
-    esp_task_wdt_reset();
+    // kick the watchdog
+    WatchdogReset();
 
     // update prevTime for next eval
     prevTime = currTime;
@@ -224,10 +222,10 @@ void TaskMonitor::CheckExpirations()
 //------------------------------------------------------------------
 // SendTaskCheckInMsg
 //------------------------------------------------------------------
-void TaskMonitor::SendTaskCheckInMsg(TaskHandle_t id)
+void TaskMonitor::SendTaskCheckInMsg(TaskHandle id)
 {
-    assert(taskMonInfo.find(id) != taskMonInfo.end());
-    assert(taskMonInfo[id].checkinCall != nullptr);
+    ASSERT(taskMonInfo.find(id) != taskMonInfo.end());
+    ASSERT(taskMonInfo[id].checkinCall != nullptr);
 
     taskMonInfo[id].checkinCall();
     taskMonInfo[id].elapsedTimeWaitingForResponse = 0;
@@ -237,9 +235,9 @@ void TaskMonitor::SendTaskCheckInMsg(TaskHandle_t id)
 //------------------------------------------------------------------
 // HandleTaskCheckin
 //------------------------------------------------------------------
-void TaskMonitor::HandleTaskCheckin(TaskHandle_t id)
+void TaskMonitor::HandleTaskCheckin(TaskHandle id)
 {
-    assert(taskMonInfo.find(id) != taskMonInfo.end());
+    ASSERT(taskMonInfo.find(id) != taskMonInfo.end());
 
     taskMonInfo[id].elapsedTimeWaitingForResponse = 0;
     taskMonInfo[id].elapsedTimeSinceLastCheckin = 0;

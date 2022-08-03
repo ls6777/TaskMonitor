@@ -6,7 +6,7 @@
 
 static constexpr uint32_t TIMEOUT = 1 * MS_PER_SEC; // 1 second
 
-QueueHandle_t Task2::msgQHandle;
+QHandle Task2::msgQHandle;
 
 //------------------------------------------------------------------
 // TaskCheckin
@@ -14,7 +14,7 @@ QueueHandle_t Task2::msgQHandle;
 void Task2::TaskCheckin()
 {
     Message msg(Message::TASK_CHECKIN);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -23,7 +23,7 @@ void Task2::TaskCheckin()
 void Task2::Process()
 {
     Message msg(Message::PROCESS);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -32,7 +32,7 @@ void Task2::Process()
 void Task2::Shutdown()
 {
     Message msg(Message::SHUTDOWN);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -40,9 +40,9 @@ void Task2::Shutdown()
 //------------------------------------------------------------------
 void Task2::Initialize()
 {
-    msgQHandle = xQueueCreate(10, sizeof(Message));
+    msgQHandle = CreateQ(10, sizeof(Message));
     Message msg(Message::INITIALIZE);
-    assert(pdPASS == xQueueSend(msgQHandle, &msg, 0));
+    ASSERT(PASS == QSend(msgQHandle, &msg));
 }
 
 //------------------------------------------------------------------
@@ -51,16 +51,16 @@ void Task2::Initialize()
 void Task2::Run()
 {
     constexpr uint32_t MSG_Q_TIMEOUT = 100; // ms
-    BaseType_t status = pdFALSE;
+    StatusType status = FALSE;
     Message msg;
 
     while (true)
     {
-        // Wait for new message to process
-        status = xQueueReceive(msgQHandle, &msg, pdMS_TO_TICKS(MSG_Q_TIMEOUT));
+        // Wait for new message to process up to MSG_Q_TIMEOUT
+        status = QRecv(msgQHandle, &msg, MS_TO_TICKS(MSG_Q_TIMEOUT));
 
         // Check status of message Q result
-        if (pdTRUE == status)
+        if (TRUE == status)
         {
             // process message
             switch (msg.msgId)
@@ -98,8 +98,9 @@ void Task2::Run()
 //---------------------------------------------------
 void Task2::HandleInitialize()
 {
+    // Register this task with the Task Monitor
     TaskMonitor::Register(TIMEOUT, &TaskCheckin);
-    printf("Task2 Intialized\r\n");
+    printf("Task2 Initialized\r\n");
 }
 
 //------------------------------------------------------------------
@@ -125,5 +126,6 @@ void Task2::HandleProcess()
 void Task2::HandleShutdown()
 {
     printf("Task2 Shutdown\r\n");
-    vTaskDelay(portMAX_DELAY);
+    // wait forever
+    DELAY(MAX_DELAY);
 }

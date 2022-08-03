@@ -1,9 +1,6 @@
 #pragma once
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/queue.h"
-
+#include "TargetPort.hpp"
 #include "Message.hpp"
 
 /// @brief Task monitor
@@ -29,9 +26,9 @@
 ///
 /// @note This should be the highest priority task.
 /// @note Only this task should kick the watchdog.
-/// @note This task needs to run more than 2x the speed of the fastest checkin period (e.g. TaskX has a 100ms timeout, then this task needs
+/// @note This task needs to run more than 2x the speed of the fastest checkin period. e.g. TaskX has a 100ms timeout, then this task needs
 ///       to execute on a period faster than 50ms to ensure the task doesn't timeout unintentionally. 10x is a good rule of thumb to use.
-/// @note All OS calls are specific to this implementation (i.e. FreeRTOS using CMSIS). To use with other RTOS, simply update OS call to
+/// @note All OS calls are specific to this implementation (i.e. FreeRTOS). To use with other RTOS, simply update OS call to
 ///       appropriate calls for the that specific RTOS or RTOS wrapper
 class TaskMonitor
 {
@@ -42,10 +39,10 @@ class TaskMonitor
         {
             public:
 
-                TaskMonitorMessage(MsgId id = INVALID, TaskHandle_t tId = nullptr, uint32_t maxTime = 0, void (*callback)() = nullptr)
+                TaskMonitorMessage(MsgId id = INVALID, TaskHandle tId = nullptr, uint32_t maxTime = 0, void (*callback)() = nullptr)
                     : Message(id), taskId{tId}, maxResponseTime{maxTime}, checkinCall{callback} {}
 
-                TaskHandle_t taskId;
+                TaskHandle taskId;
                 uint32_t maxResponseTime;
                 void (*checkinCall)();
         };
@@ -72,27 +69,27 @@ class TaskMonitor
 
         /// @brief handle checkin message from other tasks
         /// @param msg - msg received
-        void HandleTaskCheckin(TaskHandle_t id);
+        void HandleTaskCheckin(TaskHandle id);
 
         /// @brief Checks for task expirations
         void CheckExpirations();
 
         /// @brief Send a message to a task for a checkin response
         /// @param id - id of task to send message to
-        void SendTaskCheckInMsg(TaskHandle_t id);
+        void SendTaskCheckInMsg(TaskHandle id);
 
         /// @brief Handle initialization message
         void HandleInitialize();
 
         /// @brief Handle the Registration of a task with the monitor
-        /// @param id- thread id for the task
+        /// @param id - thread id for the task
         /// @param maxResponseTime - Maximum time the task monitor will wait for a response from a task, from a checkin request
         /// @param checkinCall - function pointer to the checkin call to use when task monitor sends a message to the task
-        void HandleRegister(TaskHandle_t id, uint32_t maxResponseTime, void (*checkinCall)());
+        void HandleRegister(TaskHandle id, uint32_t maxResponseTime, void (*checkinCall)());
 
         /// @brief Shutdown this task
         void HandleShutdown();
 
-        static QueueHandle_t msgQHandle;
+        static QHandle msgQHandle;
 };
 

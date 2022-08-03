@@ -5,15 +5,15 @@ class Message
 {
     public:
 
-        /// @brief Type of messages for the Ecg Data Flash Saver
+        /// @brief Type of messages
         enum MsgId
         {
             INVALID,        ///< INVALID
             INITIALIZE,     ///< Initialize the task
-            TASK_CHECKIN,   ///< Checkin Message
+            TASK_CHECKIN,   ///< Task Monitor Checkin Message
             REGISTER,       ///< Register
             PROCESS,        ///< Do some processing
-            SHUTDOWN,       ///< message to shutdown this task
+            SHUTDOWN,       ///< shutdown message
             NUM_MSG_IDS
         };
 
