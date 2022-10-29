@@ -1,0 +1,11 @@
+@startuml
+
+TaskMonitor -> "Task1::TaskCheckin()"
+"Task1::TaskCheckin()" -> Task1: Qsend(msg)
+Task1 -> Task1: Qrecv(msg)
+Task1 -> "TaskMonitor::TaskCheckin()"
+"TaskMonitor::TaskCheckin()" -> TaskMonitor:Qsend(msg)
+TaskMonitor -> TaskMonitor: Qrecv(msg)
+TaskMonitor -> TaskMonitor: HandleCheckin()
+
+@enduml
