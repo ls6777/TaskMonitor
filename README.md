@@ -19,4 +19,4 @@ Task Monitor intended for embedded systems, including small micro controller env
 - Unsolicited messages received for task checkin will automatically reset the timing, so a message won't go out to a task unnecessarily
 
 ## Targets
-I started this work on an STM32 board, but was required to switch to the ESP32 platform before completing the project.  I felt it was valuable to provide both as different examples of doing essentially the same thing.  Currently the STM32 is the most complete.  However, as I've switched over the the ESP32, that will eventually be the latest and best example. However, this can be adapted to use with any target and RTOS.
+I started this work on an STM32 board, but was required to switch to the ESP32 platform before completing the project.  I felt it was valuable to provide both as different examples of doing essentially the same thing.  The ESP32 is the most complete. However, this can be adapted to use with any target and RTOS.
