@@ -69,6 +69,11 @@ class CheckinTracker
         }
 
         /// @brief Advance time for all tasks, request checkins that are due and report violations
+        /// @details For each task: if it isn't waiting for a response and more than its timeout has elapsed since
+        ///          its last checkin, its checkin callback is called and it starts waiting. If it is waiting and more
+        ///          than its timeout has elapsed since the request, onViolation is called.
+        /// @tparam ViolationHandler - any callable (function, lambda, function object) that can be called as
+        ///                            onViolation(TaskId, const Info&)
         /// @param[in] elapsedMs - time (ms) since the previous call
         /// @param[in] onViolation - called as onViolation(id, info) for every task that has waited longer than its
         ///                          timeout for a response. Called again on every Update() until the task checks in

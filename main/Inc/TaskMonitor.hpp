@@ -27,7 +27,8 @@
 /// @note Only this task should kick the watchdog.
 /// @note This task needs to evaluate more than twice as fast as the shortest task timeout. e.g. if TaskX has a
 ///       100 ms timeout, this task needs to run faster than every 50 ms. 10x is a good rule of thumb.
-/// @note All OS calls go through TargetPort.hpp, so only that layer needs changing for another RTOS or target.
+/// @note All OS and target calls go through TargetPort, so only that layer needs changing for another RTOS or
+///       target.
 class TaskMonitor
 {
     public:
@@ -60,7 +61,9 @@ class TaskMonitor
         static void Initialize();
 
         /// @brief Execution of the task monitor
-        /// @details Main loop that processes messages and checks for expired tasks. Never returns.
+        /// @details Main loop: waits up to the evaluation period for a message and processes it, then checks for
+        ///          expired tasks (CheckExpirations()). Also prints the max response times every 30 seconds if
+        ///          ENABLE_TASK_MAX_CHECKIN_TIMES is defined. Never returns.
         void Run();
 
         /// @brief Check in with the task monitor
@@ -88,7 +91,8 @@ class TaskMonitor
         /// @param[in] id - task checking in
         void HandleTaskCheckin(TaskHandle id);
 
-        /// @brief Update the elapsed times, request checkins that are due, act on violations and kick the watchdog
+        /// @brief Update the elapsed times, request checkins that are due and act on violations
+        /// @details Kicks the watchdog, unless a violation has been detected (then the watchdog resets the device).
         void CheckExpirations();
 
         /// @brief Print the longest time each task has taken to respond to a checkin request

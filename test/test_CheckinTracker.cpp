@@ -10,7 +10,7 @@
 
 namespace
 {
-    using Tracker = CheckinTracker<int>;
+    using Tracker = CheckinTracker<int>;    ///< Tracker under test, with plain ints as task IDs
 
     constexpr int TASK_A = 1;   ///< ID of the first test task
     constexpr int TASK_B = 2;   ///< ID of the second test task
@@ -30,7 +30,9 @@ namespace
         std::vector<int> ids;               ///< Task IDs reported, in order
         std::vector<uint32_t> elapsed;      ///< elapsedWaitingForResponse of each report
 
-        /// @brief Violation handler passed to Tracker::Update()
+        /// @brief Violation handler passed to Tracker::Update(): records the task and how long it has waited
+        /// @param[in] id - task in violation
+        /// @param[in] info - monitoring state of the task
         void operator()(int id, const Tracker::Info& info)
         {
             ids.push_back(id);
@@ -39,6 +41,9 @@ namespace
     };
 
     /// @brief Get the monitoring state of a registered task
+    /// @param[in] tracker - tracker to look in
+    /// @param[in] id - registered task
+    /// @return monitoring state of the task
     const Tracker::Info& InfoOf(const Tracker& tracker, int id)
     {
         return tracker.Tasks().at(id);
@@ -278,6 +283,7 @@ static void test_IndependentTasks(void)
 }
 
 /// @brief Run all tests
+/// @return number of failed tests (0 if all passed)
 int main(void)
 {
     UNITY_BEGIN();

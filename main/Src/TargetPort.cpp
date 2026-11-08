@@ -34,7 +34,7 @@ namespace
 //------------------------------------------------------------------
 // GetCurrTaskHandle
 //------------------------------------------------------------------
-TaskHandle GetCurrTaskHandle()
+TaskHandle TargetPort::GetCurrTaskHandle()
 {
     return xTaskGetCurrentTaskHandle();
 }
@@ -42,7 +42,7 @@ TaskHandle GetCurrTaskHandle()
 //------------------------------------------------------------------
 // GetTaskName
 //------------------------------------------------------------------
-const char* GetTaskName(TaskHandle taskId)
+const char* TargetPort::GetTaskName(TaskHandle taskId)
 {
     return pcTaskGetName(taskId);
 }
@@ -50,7 +50,7 @@ const char* GetTaskName(TaskHandle taskId)
 //------------------------------------------------------------------
 // GetTimeMs
 //------------------------------------------------------------------
-uint32_t GetTimeMs()
+uint32_t TargetPort::GetTimeMs()
 {
     return pdTICKS_TO_MS(xTaskGetTickCount());
 }
@@ -58,7 +58,7 @@ uint32_t GetTimeMs()
 //------------------------------------------------------------------
 // StartWatchdog
 //------------------------------------------------------------------
-void StartWatchdog()
+void TargetPort::StartWatchdog()
 {
     ESP_ERROR_CHECK(esp_task_wdt_add(nullptr));
 }
@@ -66,7 +66,7 @@ void StartWatchdog()
 //------------------------------------------------------------------
 // WatchdogReset
 //------------------------------------------------------------------
-void WatchdogReset()
+void TargetPort::WatchdogReset()
 {
     esp_task_wdt_reset();
 }
@@ -74,7 +74,7 @@ void WatchdogReset()
 //------------------------------------------------------------------
 // CreateQ
 //------------------------------------------------------------------
-QHandle CreateQ(uint32_t qLength, uint32_t itemSize)
+QHandle TargetPort::CreateQ(uint32_t qLength, uint32_t itemSize)
 {
     return xQueueCreate(qLength, itemSize);
 }
@@ -82,7 +82,7 @@ QHandle CreateQ(uint32_t qLength, uint32_t itemSize)
 //------------------------------------------------------------------
 // QSend
 //------------------------------------------------------------------
-StatusType QSend(QHandle qId, const void* buf)
+StatusType TargetPort::QSend(QHandle qId, const void* buf)
 {
     return xQueueSend(qId, buf, 0);
 }
@@ -90,7 +90,7 @@ StatusType QSend(QHandle qId, const void* buf)
 //------------------------------------------------------------------
 // QRecv
 //------------------------------------------------------------------
-StatusType QRecv(QHandle qId, void* buf, uint32_t timeout)
+StatusType TargetPort::QRecv(QHandle qId, void* buf, uint32_t timeout)
 {
     return xQueueReceive(qId, buf, timeout);
 }
@@ -98,7 +98,7 @@ StatusType QRecv(QHandle qId, void* buf, uint32_t timeout)
 //------------------------------------------------------------------
 // GetTaskList
 //------------------------------------------------------------------
-void GetTaskList(char* buf, size_t size)
+void TargetPort::GetTaskList(char* buf, size_t size)
 {
     if (BufferFitsAllTasks(buf, size))
     {
@@ -109,7 +109,7 @@ void GetTaskList(char* buf, size_t size)
 //------------------------------------------------------------------
 // GetRunTimeStats
 //------------------------------------------------------------------
-void GetRunTimeStats(char* buf, size_t size)
+void TargetPort::GetRunTimeStats(char* buf, size_t size)
 {
     if (BufferFitsAllTasks(buf, size))
     {

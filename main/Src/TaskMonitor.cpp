@@ -6,7 +6,7 @@
 
 #include <cstdio>
 
-/// @brief Define to periodically print the longest time each task took to respond to a checkin request
+/// @brief Define to print the longest time each task took to respond to a checkin request, every STATS_PERIOD
 #define ENABLE_TASK_MAX_CHECKIN_TIMES
 
 namespace
@@ -24,16 +24,18 @@ namespace
     /// @brief Monitoring state of all registered tasks
     CheckinTracker<TaskHandle> tracker;
 
-    /// @brief Set once a task has violated its timeout. The watchdog is no longer kicked, so the device resets.
+    /// @brief Set once a task has violated its timeout. CheckExpirations() then stops kicking the watchdog, so the
+    ///        watchdog resets the device.
     bool violationDetected = false;
 
     //------------------------------------------------------------------
     // OnViolation
     //------------------------------------------------------------------
     /// @brief Action taken when a task doesn't respond to a checkin request in time
-    /// @details Called on every evaluation while the task is in violation. Logs the first violation and stops
-    ///          kicking the watchdog, so the watchdog resets the device. The task monitor keeps processing its
-    ///          queue meanwhile, so other tasks checking in don't fill it.
+    /// @details Called by CheckinTracker::Update() on every evaluation while a task is in violation. Logs the first
+    ///          violation and sets violationDetected, so CheckExpirations() stops kicking the watchdog and the
+    ///          watchdog resets the device. The task monitor keeps processing its queue until then, so tasks that
+    ///          check in often don't fill it.
     ///          Replace with your own action if needed, e.g. restart the task that violated its timeout.
     /// @param[in] taskId - task in violation
     /// @param[in] info - monitoring state of the task
@@ -42,7 +44,7 @@ namespace
         if (!violationDetected)
         {
             LOG_ERROR("TaskMonitor", "Task: %s - Exceeded Checkin Time. Elapsed time %lu ms, Timeout %lu ms",
-                      GetTaskName(taskId), (unsigned long)info.elapsedWaitingForResponse,
+                      TargetPort::GetTaskName(taskId), (unsigned long)info.elapsedWaitingForResponse,
                       (unsigned long)info.timeout);
             violationDetected = true;
         }
@@ -57,7 +59,7 @@ QHandle TaskMonitor::msgQHandle = nullptr;
 void TaskMonitor::SendMessage(const TaskMonitorMessage& msg)
 {
     ASSERT(nullptr != msgQHandle);  // Initialize() not called yet
-    const StatusType status = QSend(msgQHandle, &msg);
+    const StatusType status = TargetPort::QSend(msgQHandle, &msg);
     ASSERT(PASS == status);
     (void)status;
 }
@@ -67,7 +69,7 @@ void TaskMonitor::SendMessage(const TaskMonitorMessage& msg)
 //------------------------------------------------------------------
 void TaskMonitor::Initialize()
 {
-    msgQHandle = CreateQ(MSG_Q_LENGTH, sizeof(TaskMonitorMessage));
+    msgQHandle = TargetPort::CreateQ(MSG_Q_LENGTH, sizeof(TaskMonitorMessage));
     ASSERT(nullptr != msgQHandle);
     SendMessage(TaskMonitorMessage(Message::INITIALIZE));
 }
@@ -85,7 +87,7 @@ void TaskMonitor::Shutdown()
 //------------------------------------------------------------------
 void TaskMonitor::TaskCheckin()
 {
-    SendMessage(TaskMonitorMessage(Message::TASK_CHECKIN, GetCurrTaskHandle()));
+    SendMessage(TaskMonitorMessage(Message::TASK_CHECKIN, TargetPort::GetCurrTaskHandle()));
 }
 
 //------------------------------------------------------------------
@@ -94,7 +96,7 @@ void TaskMonitor::TaskCheckin()
 void TaskMonitor::Register(uint32_t maxResponseTime, CheckinCall checkinCall)
 {
     ASSERT(nullptr != checkinCall);
-    SendMessage(TaskMonitorMessage(Message::REGISTER, GetCurrTaskHandle(), maxResponseTime, checkinCall));
+    SendMessage(TaskMonitorMessage(Message::REGISTER, TargetPort::GetCurrTaskHandle(), maxResponseTime, checkinCall));
 }
 
 //------------------------------------------------------------------
@@ -106,14 +108,14 @@ void TaskMonitor::Run()
     TaskMonitorMessage msg;
 
 #ifdef ENABLE_TASK_MAX_CHECKIN_TIMES
-    uint32_t prevStatsTime = GetTimeMs();
+    uint32_t prevStatsTime = TargetPort::GetTimeMs();
 #endif
 
     // Task loop - never exits
     while (true)
     {
         // Wait for new message up to the evaluation period
-        status = QRecv(msgQHandle, &msg, MS_TO_TICKS(MSG_Q_TIMEOUT));
+        status = TargetPort::QRecv(msgQHandle, &msg, MS_TO_TICKS(MSG_Q_TIMEOUT));
 
         // if it wasn't a timeout, then we have a message to process
         if (TRUE == status)
@@ -146,10 +148,10 @@ void TaskMonitor::Run()
         CheckExpirations();
 
 #ifdef ENABLE_TASK_MAX_CHECKIN_TIMES
-        if ((GetTimeMs() - prevStatsTime) > STATS_PERIOD)
+        if ((TargetPort::GetTimeMs() - prevStatsTime) > STATS_PERIOD)
         {
             PrintMaxResponseTimes();
-            prevStatsTime = GetTimeMs();
+            prevStatsTime = TargetPort::GetTimeMs();
         }
 #endif
     }
@@ -163,7 +165,7 @@ void TaskMonitor::PrintMaxResponseTimes()
     for (const auto& [taskId, info] : tracker.Tasks())
     {
         printf("TaskId: %p, MAX time = %lu ms, name: %s\r\n",
-               static_cast<void*>(taskId), (unsigned long)info.maxWaitingForResponse, GetTaskName(taskId));
+               static_cast<void*>(taskId), (unsigned long)info.maxWaitingForResponse, TargetPort::GetTaskName(taskId));
     }
 }
 
@@ -172,7 +174,7 @@ void TaskMonitor::PrintMaxResponseTimes()
 //------------------------------------------------------------------
 void TaskMonitor::HandleInitialize()
 {
-    StartWatchdog();
+    TargetPort::StartWatchdog();
     printf("Task Monitor Initialized\r\n");
 }
 
@@ -200,16 +202,16 @@ void TaskMonitor::HandleShutdown()
 //------------------------------------------------------------------
 void TaskMonitor::CheckExpirations()
 {
-    static uint32_t prevTime = GetTimeMs();
+    static uint32_t prevTime = TargetPort::GetTimeMs();
 
-    const uint32_t currTime = GetTimeMs();
+    const uint32_t currTime = TargetPort::GetTimeMs();
 
     tracker.Update(currTime - prevTime, OnViolation);
 
     // After a violation, let the watchdog reset the device
     if (!violationDetected)
     {
-        WatchdogReset();
+        TargetPort::WatchdogReset();
     }
 
     prevTime = currTime;

@@ -70,7 +70,7 @@ void Task1::TaskCheckin()
 void Task1::SendMessage(Message::MsgId id)
 {
     const Message msg(id);
-    const StatusType status = QSend(msgQHandle, &msg);
+    const StatusType status = TargetPort::QSend(msgQHandle, &msg);
     ASSERT(PASS == status);
     (void)status;
 }
@@ -163,7 +163,7 @@ void OnViolation(TaskHandle taskId, const CheckinTracker<TaskHandle>::Info& info
     if (!violationDetected)
     {
         LOG_ERROR("TaskMonitor", "Task: %s - Exceeded Checkin Time. Elapsed time %lu ms, Timeout %lu ms",
-                  GetTaskName(taskId), (unsigned long)info.elapsedWaitingForResponse,
+                  TargetPort::GetTaskName(taskId), (unsigned long)info.elapsedWaitingForResponse,
                   (unsigned long)info.timeout);
         violationDetected = true;
     }
@@ -185,7 +185,7 @@ Replace it with your own action if needed, e.g. restart the task in violation.
 The monitor also prints the longest time each task took to respond to a request, every 30 seconds. Remove `ENABLE_TASK_MAX_CHECKIN_TIMES` in [TaskMonitor.cpp](main/Src/TaskMonitor.cpp) to turn that off.
 
 ## Porting to another RTOS or target
-The monitor logic in [CheckinTracker.hpp](main/Inc/CheckinTracker.hpp) has no RTOS or target dependencies. Everything the task monitor and the example tasks need from the OS and target is in [TargetPort.hpp](main/Inc/TargetPort.hpp) and [TargetPort.cpp](main/Src/TargetPort.cpp):
+The monitor logic in [CheckinTracker.hpp](main/Inc/CheckinTracker.hpp) has no RTOS or target dependencies. Everything the task monitor and the example tasks need from the OS and target is in [TargetPort.hpp](main/Inc/TargetPort.hpp) and [TargetPort.cpp](main/Src/TargetPort.cpp). The functions are static members of the `TargetPort` class (e.g. `TargetPort::QSend()`). The types, constants and macros are global, so they read the same in every file:
 
 | Item | Purpose | ESP-IDF / FreeRTOS implementation |
 |---|---|---|

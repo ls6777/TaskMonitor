@@ -14,8 +14,8 @@ namespace
     constexpr uint32_t STATS_PERIOD = 30 * MS_PER_SEC;      ///< Period (ms) for printing the statistics
     constexpr uint32_t CHECKIN_TIMEOUT = 60 * MS_PER_SEC;   ///< Task monitor timeout (ms)
 
-    char taskListBuf[1024];     ///< Output of GetTaskList()
-    char taskStatsBuf[1024];    ///< Output of GetRunTimeStats()
+    char taskListBuf[1024];     ///< Output of TargetPort::GetTaskList()
+    char taskStatsBuf[1024];    ///< Output of TargetPort::GetRunTimeStats()
 }
 
 QHandle DefaultTask::msgQHandle = nullptr;
@@ -26,7 +26,7 @@ QHandle DefaultTask::msgQHandle = nullptr;
 void DefaultTask::SendMessage(Message::MsgId id)
 {
     const Message msg(id);
-    const StatusType status = QSend(msgQHandle, &msg);
+    const StatusType status = TargetPort::QSend(msgQHandle, &msg);
     ASSERT(PASS == status);
     (void)status;
 }
@@ -52,7 +52,7 @@ void DefaultTask::Shutdown()
 //------------------------------------------------------------------
 void DefaultTask::Initialize()
 {
-    msgQHandle = CreateQ(MSG_Q_LENGTH, sizeof(Message));
+    msgQHandle = TargetPort::CreateQ(MSG_Q_LENGTH, sizeof(Message));
     ASSERT(nullptr != msgQHandle);
     SendMessage(Message::INITIALIZE);
 }
@@ -65,12 +65,12 @@ void DefaultTask::Run()
     StatusType status = FALSE;
     Message msg;
 
-    uint32_t prevTime = GetTimeMs();
+    uint32_t prevTime = TargetPort::GetTimeMs();
 
     while (true)
     {
         // wait for message up to MSG_Q_TIMEOUT
-        status = QRecv(msgQHandle, &msg, MS_TO_TICKS(MSG_Q_TIMEOUT));
+        status = TargetPort::QRecv(msgQHandle, &msg, MS_TO_TICKS(MSG_Q_TIMEOUT));
 
         if (TRUE == status)
         {
@@ -94,9 +94,9 @@ void DefaultTask::Run()
             }
         }
 
-        if ((GetTimeMs() - prevTime) > STATS_PERIOD)
+        if ((TargetPort::GetTimeMs() - prevTime) > STATS_PERIOD)
         {
-            prevTime = GetTimeMs();
+            prevTime = TargetPort::GetTimeMs();
             PrintStats();
         }
     }
@@ -107,14 +107,14 @@ void DefaultTask::Run()
 //------------------------------------------------------------------
 void DefaultTask::PrintStats()
 {
-    GetTaskList(taskListBuf, sizeof(taskListBuf));
+    TargetPort::GetTaskList(taskListBuf, sizeof(taskListBuf));
     printf("\r\nTASK INFO**********************************************\r\n");
     printf("Name          State  Priority   Stack   Num    Core\r\n");
     printf("*******************************************************\r\n");
     printf("%s\r\n", taskListBuf);
     printf("\r\n");
 
-    GetRunTimeStats(taskStatsBuf, sizeof(taskStatsBuf));
+    TargetPort::GetRunTimeStats(taskStatsBuf, sizeof(taskStatsBuf));
     printf("TASK STATS INFO****************************************\r\n");
     printf("Name             Abs Time       %% Time\r\n");
     printf("*******************************************\r\n");

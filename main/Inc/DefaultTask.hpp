@@ -17,7 +17,8 @@ class DefaultTask
         void Initialize();
 
         /// @brief Execution of DefaultTask
-        /// @details Main loop that waits for messages posted to the queue and processes them. Never returns.
+        /// @details Main loop that waits up to 1 second for messages posted to the queue and processes them, and
+        ///          prints the statistics every 30 seconds. Never returns.
         void Run();
 
         /// @brief Request a checkin from this task (task monitor checkin callback)

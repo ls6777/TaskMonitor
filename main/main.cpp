@@ -89,7 +89,8 @@ static void StartTask3(void* argument)
 //------------------------------------------------------------------
 // Main Task
 //------------------------------------------------------------------
-/// @brief Application entry point: creates the task monitor and the example tasks
+/// @brief Application entry point: initializes the task monitor, then creates its task and the example tasks
+/// @details Returns once the tasks are created. ESP-IDF then deletes the main task.
 void app_main(void)
 {
     // Create the task monitor's queue before any task can register with it
