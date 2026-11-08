@@ -2,148 +2,232 @@
 Embedded Task Monitor
 
 ## Overview
-Task Monitor intended for embedded systems, including small micro controller environments running a lightweight RTOS (e.g. FreeRTOS). The Task monitor ensures that all other tasks are running as expected in the system. If there's a failure in one specific task, then the task monitor can take an action based on what the user would like to do.  Default is to ASSERT and allow the watchdog to lapse to reset the device.  However, it could easily be updated to restart the task in violation.
+A task monitor for embedded systems, including small microcontrollers running a lightweight RTOS (e.g. FreeRTOS). The task monitor makes sure all other tasks are running as expected. If a task stops checking in, the task monitor takes an action. The default action is to log the task's name and stop kicking the watchdog, so the device resets. This can easily be changed, e.g. to restart the task in violation.
+
+The example application runs on an ESP32 (ESP-WROVER-KIT) with ESP-IDF, but the monitor itself is RTOS and target agnostic: all OS and target calls go through a small port layer.
 
 ## Introduction
-When working in multi-threaded environments, having a task monitor is one of the most useful and critical components for robustness, safety, and stability. Essentially, the task monitor makes sure that all the other tasks in the system are working properly and as intended. If a task stops checking in with the task monitor, the task monitor can identify the violation and do various actions. A very basic action is to allow the watchdog to timeout and reset the device.
+In a multi-threaded system, a task monitor is one of the most useful components for robustness, safety and stability. It makes sure all the other tasks are working as intended. If a task stops checking in with the task monitor, the monitor detects the violation and takes an action. A very basic action is to let the watchdog time out and reset the device.
 
-Nearly every product I've worked on has included some type of task monitor and having improved the implementation over various projects and years of work, I felt this would be useful for the community.
+Nearly every product I've worked on has included some type of task monitor. Having improved the implementation over various projects and years of work, I felt this would be useful for the community.
 
 ## Background
-Many operating systems have built in functionality for task monitoring (e.g. linux). However, many smaller real time operating systems do not have this functionality (e.g., FreeRTOS). This implementation is intended for use in smaller embedded systems that may not have built in functionality.
+Many operating systems have built-in task monitoring (e.g. Linux). Many smaller real time operating systems (e.g. FreeRTOS) don't. This implementation is intended for smaller embedded systems without that functionality.
 
 ## Features
 - Monitor any number of tasks
-- Each task can have a unique timeout period
-- Task Monitor will send out a message for a task to respond
-- OR a task can send a message to the Task Monitor at anytime without have to respond to a specific message
-- Task Monitor automatically determines which task is checking in (No need to track or send Task IDs)
-- Watchdog only needs to be managed in a single place
+- Each task can have its own timeout period
+- The task monitor sends a checkin request to a task, and the task responds
+- OR a task can check in at any time, without being asked
+- The task monitor identifies the task checking in automatically (no need to track or send task IDs)
+- The watchdog is managed in a single place
 - Ideal for event driven and message driven tasks
 - Small footprint
-- Can be used for very small embedded systems (e.g. FreeRTOS on 8-bit micro if desired)
-- RTOS agnostic (Can be used with any RTOS with minor updates)
-- Messages will only go out once per period for that task timeout (e.g. task timeout is 100ms, then messages sent out will happen at most once every 100ms, regardless of how quickly the response is received)
-- Unsolicited messages received for task checkin will automatically reset the timing, so a message won't go out to a task unnecessarily
+- RTOS and target agnostic: only the port layer (`TargetPort.hpp/.cpp`) needs changing
+- At most one checkin request per timeout period per task, however quickly the responses arrive (e.g. with a 100 ms timeout, requests go out at most every 100 ms)
+- An unsolicited checkin resets the timing, so no request is sent unnecessarily
+
+## Project layout
+```
+CMakeLists.txt              ESP-IDF project
+sdkconfig.defaults          Settings the project relies on (tick rate, task watchdog, run-time stats)
+main/
+  main.cpp                  Example application: creates the task monitor and example tasks
+  Inc/CheckinTracker.hpp    Generic monitor logic: checkin timing, requests, violations (no RTOS/target code)
+  Inc/TaskMonitor.hpp       The task monitor task (message handling, watchdog, violation action)
+  Src/TaskMonitor.cpp
+  Inc/TargetPort.hpp        Port layer: queues, task IDs, time, watchdog, task statistics
+  Src/TargetPort.cpp        Port layer implementation for FreeRTOS on ESP-IDF
+  Inc/Message.hpp           Message posted to a task's queue
+  Inc/Utils.hpp             Small shared helpers
+  Inc|Src/DefaultTask.*     Example: prints task list and run-time statistics, responds to checkin requests
+  Inc|Src/Task1.*           Example: 10 s timeout, responds to checkin requests
+  Inc|Src/Task2.*           Example: 1 s timeout, checks in unsolicited every 100 ms
+  Inc|Src/Task3.*           Example: 100 ms timeout, responds to checkin requests
+test/                       Host unit tests for CheckinTracker (Unity)
+```
 
 ## Using the Code
-There are only two basic functions needed to utilize the functionality within existing tasks/threads.
+Tasks only need two functions.
 
-First, the task/thread needs to register itself with the Task monitor. This should be done as part of the initialization of the task/thread, or at the start of task/thread.
+First, a task registers itself with the task monitor, as part of its initialization:
 
-- The first argument is the maximum time the task monitor will wait for a response from a task, from a checkin request.
-- The second argument is the function pointer to the checkin call the task monitor uses to send a message to the task when a checkin request is issued.
+- The first argument is the task's timeout in ms: the maximum time the monitor waits before requesting a checkin, and then for the response.
+- The second argument is the callback the task monitor calls to request a checkin from the task.
 
+```cpp
+TaskMonitor::Register(CHECKIN_TIMEOUT, &TaskCheckin);
 ```
-TaskMonitor::Register(TIMEOUT, &TaskCheckin);
-```
-The callback in the `Register` function above should be something that can be used to notify the task registering with the task monitor.  For example:
 
-```
+The callback runs in the task monitor's task, so it must be quick and must not block. It should just notify the registering task. For example, by posting a message to the task's queue:
+
+```cpp
 void Task1::TaskCheckin()
 {
-    Message msg(Message::TASK_CHECKIN);
-    ASSERT(PASS == QSend(msgQHandle, &msg));
-} 
+    SendMessage(Message::TASK_CHECKIN);
+}
+
+void Task1::SendMessage(Message::MsgId id)
+{
+    const Message msg(id);
+    const StatusType status = QSend(msgQHandle, &msg);
+    ASSERT(PASS == status);
+    (void)status;
+}
 ```
 
-The `TaskCheckin` will be called by the task monitor task when it requests a checkin from `Task1`. This implementation will create a message to put in the message queue that Task1 listens on and take appropriate action on receiving that message (e.g. call `TaskCheckin()` as shown below).
+When Task1 receives the `TASK_CHECKIN` message, it checks in with the task monitor. For a task without a message queue, see [Alternative checkin callback](#alternative-checkin-callback) below.
 
-For another solution without relying on message queue in `Task1`, see OS Porting below.
+The other function checks in with the task monitor. Call it from the task that is checking in, in response to a request or at any time:
 
-The other main function is to checkin when desired with the task monitor.
-
-```
+```cpp
 TaskMonitor::TaskCheckin();
 ```
-The following sequence diagram shows how this process operates.
-![image](https://user-images.githubusercontent.com/26239627/198851117-43866cd8-f42d-49a7-b140-38054fe01c95.png)
 
-A task can respond to a checkin request, or preemptively checkin as desired.
+The following sequence diagram shows a requested checkin:
 
-The task monitor will send a request to the registered task once every timeout period (`TIMEOUT` time provided during registration). If the registered task posts a checkin to the task monitor before a request has been sent by the task monitor, then the timer will reset and the task monitor will not send a request until another full timeout period has elapsed.
+```mermaid
+sequenceDiagram
+    participant TM as TaskMonitor
+    participant CB as Task1::TaskCheckin()
+    participant T1 as Task1
+    participant TC as TaskMonitor::TaskCheckin()
+
+    TM->>CB: request checkin (timeout elapsed)
+    CB->>T1: QSend(TASK_CHECKIN)
+    T1->>T1: QRecv(TASK_CHECKIN)
+    T1->>TC: check in
+    TC->>TM: QSend(TASK_CHECKIN)
+    TM->>TM: QRecv(TASK_CHECKIN)
+    TM->>TM: HandleTaskCheckin()
+```
+
+The task monitor sends a request to a registered task once its timeout has elapsed since its last checkin. If the task checks in before that, the timer restarts and no request is sent until another full timeout period has elapsed. After a request, the task has another full timeout period to respond, so the worst case time to detect a stuck task is twice its timeout.
 
 ### Task Monitor Task
-The task monitor functionality relies on the operating system in use and is required to have its own task/thread to operate in. Therefore, the developer needs to create and start the task monitor task as part of the rest of the system task initializations. For example, in FreeRTOS:
+The task monitor runs in its own task. It should be the highest priority task, and it must evaluate more than twice as fast as the shortest task timeout (it runs every 10 ms by default, see `MSG_Q_TIMEOUT` in [TaskMonitor.cpp](main/Src/TaskMonitor.cpp)).
 
-```
-void StartTaskMonitor(void *argument)
+Call `TaskMonitor::Initialize()` before creating any task that registers with it. This creates the monitor's queue, so it exists however the tasks get scheduled. Then create the task monitor task. For example, with FreeRTOS:
+
+```cpp
+static void StartTaskMonitor(void* argument)
 {
     TaskMonitor taskMon;
-    taskMon.Initialize();
     taskMon.Run();
 }
 
 void app_main(void)
 {
-    TaskHandle_t taskHandle = nullptr;
+    // Create the task monitor's queue before any task can register with it
+    TaskMonitor::Initialize();
 
-    // Task monitor
-    xTaskCreate(&StartTaskMonitor, "TaskMonitor", TASK_MONITOR_STACK_SIZE, 
-                NULL, TASK_MONITOR_PRIORITY, &taskHandle);
+    xTaskCreate(&StartTaskMonitor, "TaskMonitor", TASK_MONITOR_STACK_SIZE, nullptr, TASK_MONITOR_PRIORITY, nullptr);
+
+    // ... create the other tasks
 }
 ```
 
-### OS Porting
-The task monitor also uses some of the operating system calls to operate. Therefore, *TargetPort.hpp* and *TargetPort.cpp* were created to easily port for different operating systems being utilitized. The main items for porting purposes are message queue operations, task identification operations and watchdog operations.
+### Alternative checkin callback
+If a task doesn't use a message queue, a flag works too. Use `std::atomic`, because the callback runs in the task monitor's task:
 
-#### Alternative TaskCheckin Callback Solution
-If a task in the system does **not** utilize a message queue, you can use a static boolean to accomplish the same outcome. The callback function could look like something below:
+```cpp
+static std::atomic<bool> checkinRequested{false};
 
-```
-static bool checkinRequested = false;
+void Task1::TaskCheckin()
+{
+    checkinRequested = true;
+}
 
-void Task1::TaskCheckin() 
-{ 
-   checkinRequested = true;
-} 
-```
-In the task execution loop, you can simply check if this flag is set, send the checkin message to the TaskMonitor, and continue the task execution.  An example of this is below:
-
-```
 void Task1::Run()
 {
-   // Task loop - never exits
-   while (true)
-   {
-      if (true == checkinRequested)
-      {
-         TaskMonitor::TaskCheckin();
-         checkinRequested = false;
-      }
+    // Task loop - never exits
+    while (true)
+    {
+        if (checkinRequested.exchange(false))
+        {
+            TaskMonitor::TaskCheckin();
+        }
 
-      // Rest of Task execution
-      // ...
-   }
+        // Rest of task execution
+        // ...
+    }
 }
 ```
+
 ### Violation Actions
-The task monitor takes an action when it determines that a task has violated the time limit to checkin. The default action is to do the following:
+When a task doesn't respond to a checkin request in time, the task monitor calls `OnViolation()` in [TaskMonitor.cpp](main/Src/TaskMonitor.cpp). It's called on every evaluation until the task checks in or registers again. By default it logs the first violation and the task monitor stops kicking the watchdog, so the watchdog resets the device:
 
-```
-// check for expired task checkins... if there was a violation, 
-// we can print the name of the violator and then wait until the watchdog bites
-if (monInfo.elapsedTimeWaitingForResponse > monInfo.timeout)
+```cpp
+void OnViolation(TaskHandle taskId, const CheckinTracker<TaskHandle>::Info& info)
 {
-   LOG_ERROR("TaskMonitor", "Task: %s - Exceeded Checkin Time. 
-              Elapsed time %u ms, Timeout %u ms",
-              GetTaskName(taskId), monInfo.elapsedTimeWaitingForResponse, 
-              monInfo.timeout);
-
-   while(1) {}
+    if (!violationDetected)
+    {
+        LOG_ERROR("TaskMonitor", "Task: %s - Exceeded Checkin Time. Elapsed time %lu ms, Timeout %lu ms",
+                  GetTaskName(taskId), (unsigned long)info.elapsedWaitingForResponse,
+                  (unsigned long)info.timeout);
+        violationDetected = true;
+    }
 }
 ```
-The `while(1) {}` allows the task to spin forever until the watchdog resets the device. This code can be updated to do whatever the user desires:
+
+The task monitor keeps processing its queue until the reset. If it just spun instead, tasks that check in often would fill its queue and fail. On the ESP32 the output looks like this:
 
 ```
-// Designers can also replace the above with their own logic that can reset tasks, 
-// end tasks, or take other actions based on violations. Example below:
-// if (monInfo.elapsedTimeWaitingForResponse > monInfo.timeout)
-// {
-//    // Do action, such as restart the task that violated the timeout
-// }
+E (20284) TaskMonitor: Task: Task1 - Exceeded Checkin Time. Elapsed time 10010 ms, Timeout 10000 ms
+E (25273) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+E (25273) task_wdt:  - TaskMonitor (CPU 0/1)
+...
+Rebooting...
 ```
-The included code provides more thorough examples and details.
+
+Replace it with your own action if needed, e.g. restart the task in violation.
+
+The monitor also prints the longest time each task took to respond to a request, every 30 seconds. Remove `ENABLE_TASK_MAX_CHECKIN_TIMES` in [TaskMonitor.cpp](main/Src/TaskMonitor.cpp) to turn that off.
+
+## Porting to another RTOS or target
+The monitor logic in [CheckinTracker.hpp](main/Inc/CheckinTracker.hpp) has no RTOS or target dependencies. Everything the task monitor and the example tasks need from the OS and target is in [TargetPort.hpp](main/Inc/TargetPort.hpp) and [TargetPort.cpp](main/Src/TargetPort.cpp):
+
+| Item | Purpose | ESP-IDF / FreeRTOS implementation |
+|---|---|---|
+| `TaskHandle`, `QHandle`, `StatusType`, `PASS`, `FAIL`, `TRUE`, `FALSE`, `MAX_DELAY` | Types and constants | `TaskHandle_t`, `QueueHandle_t`, `BaseType_t`, `pdPASS`, ... |
+| `CreateQ`, `QSend`, `QRecv` | Message queues | `xQueueCreate`, `xQueueSend`, `xQueueReceive` |
+| `GetCurrTaskHandle`, `GetTaskName` | Identify the task checking in | `xTaskGetCurrentTaskHandle`, `pcTaskGetName` |
+| `GetTimeMs`, `MS_TO_TICKS`, `DELAY` | Time | `xTaskGetTickCount`, `pdMS_TO_TICKS`, `vTaskDelay` |
+| `StartWatchdog`, `WatchdogReset` | Watchdog, called only from the task monitor's task | `esp_task_wdt_add`, `esp_task_wdt_reset` |
+| `ASSERT`, `LOG_ERROR` | Asserts and error logging | `assert`, `ESP_LOGE` |
+| `GetTaskList`, `GetRunTimeStats` | Task statistics (DefaultTask example only) | `vTaskList`, `vTaskGetRunTimeStats` |
+
+For example, a port to plain FreeRTOS on another target keeps the queue, task and time functions as they are and only replaces the two watchdog functions with that target's hardware watchdog driver.
+
+The task monitor identifies tasks by `TaskHandle`, so it needs a way to get the handle of the calling task (`GetCurrTaskHandle`) and a type that can be used as a `std::map` key.
+
+Asserts use the standard `assert()` and are meant to stay enabled, even in production builds. They can be disabled through the project configuration (NDEBUG), so no required code is ever inside an `ASSERT`.
+
+## Building
+Tested with ESP-IDF v6.1. From an ESP-IDF terminal:
+
+```
+idf.py set-target esp32
+idf.py build
+idf.py -p COM3 flash monitor
+```
+
+`sdkconfig.defaults` holds the settings the project relies on, so they survive `idf.py set-target` and deleting `sdkconfig`:
+
+- `CONFIG_FREERTOS_HZ=1000`: 1 ms tick, for 10 ms evaluation and clean wrap-around of `GetTimeMs()`
+- `CONFIG_ESP_TASK_WDT_PANIC=y`: the task watchdog resets the device. Without it, the watchdog only prints a warning and a violation never resets the device.
+- `CONFIG_FREERTOS_USE_TRACE_FACILITY`, `..._USE_STATS_FORMATTING_FUNCTIONS`, `..._GENERATE_RUN_TIME_STATS`: task statistics printed by DefaultTask
+
+The project includes a shared VS Code setup (`.vscode/c_cpp_properties.json` and `extensions.json`) for the ESP-IDF and C/C++ extensions. Code navigation uses `build/compile_commands.json`, so build once first.
+
+## Unit tests
+The generic monitor logic (`CheckinTracker`) has host unit tests in `test/`, using the Unity framework that ships with ESP-IDF. They need `IDF_PATH` set and a host gcc, CMake and Ninja (e.g. MinGW from WinLibs on Windows):
+
+```
+cmake -S test -B test/build -G Ninja
+cmake --build test/build
+ctest --test-dir test/build --output-on-failure
+```
 
 ## Targets
-I started this work on an STM32 board, but was required to switch to the ESP32 platform before completing the project.  I felt it was valuable to provide both as different examples of doing essentially the same thing.  The ESP32 is the most complete. However, this can be adapted to use with any target and RTOS.
+The example application runs on an ESP32 (ESP-WROVER-KIT) with ESP-IDF and FreeRTOS. The monitor can be adapted to any other target and RTOS through the port layer (see [Porting to another RTOS or target](#porting-to-another-rtos-or-target)).

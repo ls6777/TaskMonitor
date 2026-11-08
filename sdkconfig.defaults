@@ -1,0 +1,20 @@
+# Settings this project relies on. ESP-IDF applies these whenever sdkconfig is (re)generated,
+# e.g. after "idf.py set-target" or deleting sdkconfig.
+
+CONFIG_IDF_TARGET="esp32"
+
+# 1 ms tick: the task monitor evaluates every 10 ms, and GetTimeMs() wraps cleanly at 2^32 ms
+CONFIG_FREERTOS_HZ=1000
+
+# Needed by DefaultTask for vTaskList() and vTaskGetRunTimeStats()
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS=y
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER=y
+
+# The task monitor kicks the task watchdog. When a task violates its checkin timeout, the monitor stops kicking it
+# and the watchdog must reset the device (without PANIC it only prints a warning).
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_ESP_TASK_WDT_PANIC=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=5
